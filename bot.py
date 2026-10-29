@@ -20,9 +20,9 @@ prompt = f"""
 بر اساس این موضوع: '{idea_topic}'، یک محتوای علمی، جذاب و استاندارد برای کانال تلگرام تولید کن که شامل عنوان جذاب، متن اصلی علمی و هشتگ‌های تخصصی باشد.
 """
 
-# ۴. تولید محتوا با هوش مصنوعی - مدل قدرتمند gemini-2.0-pro
+# ۴. تولید محتوا با هوش مصنوعی
 response = client.models.generate_content(
-    model="gemini-2.0-pro",
+    model="gemini-3.8-flash",
     contents=prompt
 )
 post_content = response.text
