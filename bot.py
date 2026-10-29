@@ -1,12 +1,9 @@
 import os
-import google.generativeai as genai
+from google import genai
 
 # خواندن کلید امن از تنظیمات گیت‌هاب
 GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY")
-genai.configure(api_key=GOOGLE_API_KEY)
-
-# انتخاب مدل هوش مصنوعی
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
 # موضوع یا ایده پزشکی شما
 idea_topic = (
@@ -25,6 +22,9 @@ prompt = f"""
 """
 
 # دریافت پاسخ از جمینای
-response = model.generate_content(prompt)
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=prompt
+)
 print("=== محتوای تولید شده توسط ایجنت داروسازی ===")
 print(response.text)
