@@ -1,6 +1,7 @@
 import os
 from google import genai
 import requests
+import re
 
 # ۱. خواندن کلیدها از گاوصندوق گیت‌هاب
 GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -18,24 +19,33 @@ idea_topic = (
 prompt = f"""
 تو یک دستیار تخصصی و حرفه‌ای در حوزه داروسازی هستی. 
 بر اساس این موضوع: '{idea_topic}'، یک محتوای علمی، جذاب و استاندارد برای کانال تلگرام تولید کن که شامل عنوان جذاب، متن اصلی علمی و هشتگ‌های تخصصی باشد.
+از مارک‌داون پیچیده و نامتعادل استفاده نکن. فقط از ** برای بولد و - برای لیست استفاده کن.
 """
 
-# ۴. تولید محتوا با هوش مصنوعی
+# ۴. تولید محتوا با مدل پایدار gemini-3.8-flash
 response = client.models.generate_content(
-    model="gemini-3.5-flash-lite",
+    model="gemini-3.8-flash",
     contents=prompt
 )
 post_content = response.text
 
-# ۵. ارسال خودکار به کانال تلگرام
+# ۵. پاکسازی مارک‌داون مشکل‌ساز برای تلگرام
+def clean_markdown(text):
+    # حذف یا اصلاح ستاره‌های نامتعادل
+    text = re.sub(r'\*{3,}', '**', text)
+    return text
+
+cleaned_content = clean_markdown(post_content)
+
+# ۶. ارسال به تلگرام (بدون parse_mode برای پایداری بیشتر)
 telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 payload = {
     "chat_id": TELEGRAM_CHAT_ID,
-    "text": f"💊 **پست خودکار ایجنت داروسازی**\n\n{post_content}",
-    "parse_mode": "Markdown",
+    "text": f"💊 پست خودکار ایجنت داروسازی\n\n{cleaned_content}",
+    # parse_mode حذف شد تا خطای entity پیش نیاید
 }
 
 res = requests.post(telegram_url, json=payload)
 print("نتیجه ارسال به تلگرام:", res.json())
 print("\n=== محتوای تولید شده ===")
-print(post_content)
+print(cleaned_content)
