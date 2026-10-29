@@ -22,7 +22,7 @@ prompt = f"""
 
 # ۴. تولید محتوا با هوش مصنوعی
 response = client.models.generate_content(
-    model="gemini-3.1-pro",
+    model="gemini-3.8-flash",
     contents=prompt
 )
 post_content = response.text
