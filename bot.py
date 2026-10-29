@@ -1,30 +1,37 @@
 import os
-from google import genai
+import google.generativeai as genai
+import requests
 
-# خواندن کلید امن از تنظیمات گیت‌هاب
+# ۱. خواندن کلیدها از گاوصندوق گیت‌هاب
 GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=GOOGLE_API_KEY)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# موضوع یا ایده پزشکی شما
+# ۲. تنظیم جمینای
+genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+# ۳. ایده یا موضوع پزشکی
 idea_topic = (
     "بررسی مکانیسم‌های نوین و بازکارآمدی داروی متفورمین در بیماری‌های متابولیک"
 )
 
-# پرامپت تخصصی داروسازی
 prompt = f"""
 تو یک دستیار تخصصی و حرفه‌ای در حوزه داروسازی هستی. 
-بر اساس این موضوع: '{idea_topic}'، یک محتوای علمی، جذاب و استاندارد برای شبکه‌های اجتماعی تولید کن که شامل بخش‌های زیر باشد:
-1. عنوان جذاب برای پست
-2. متن اصلی پست علمی (مناسب برای کانال تلگرام و بله)
-3. متن کوتاه و خلاصه به همراه هشتگ‌های تخصصی (مناسب برای انتشار دستی در اینستاگرام)
-
-خروجی را به صورت ساختاریافته و مرتب تحویل بده.
+بر اساس این موضوع: '{idea_topic}'، یک محتوای علمی، جذاب و استاندارد برای کانال تلگرام تولید کن که شامل عنوان جذاب، متن اصلی علمی و هشتگ‌های تخصصی باشد.
 """
 
-# دریافت پاسخ از جمینای
-response = client.models.generate_content(
-    model="gemini-3.8-flash",
-    contents=prompt
-)
-print("=== محتوای تولید شده توسط ایجنت داروسازی ===")
-print(response.text)
+# ۴. تولید محتوا با هوش مصنوعی
+response = model.generate_content(prompt)
+post_content = response.text
+
+# ۵. ارسال خودکار به کانال تلگرام
+telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+payload = {
+    "chat_id": TELEGRAM_CHAT_ID,
+    "text": f"💊 **پست خودکار ایجنت داروسازی**\n\n{post_content}",
+    "parse_mode": "Markdown",
+}
+
+res = requests.post(telegram_url, json=payload)
+print("نتیجه ارسال به تلگرام:", res.json())
