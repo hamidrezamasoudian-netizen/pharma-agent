@@ -23,7 +23,7 @@ prompt = f"""
 
 # دریافت پاسخ از جمینای
 response = client.models.generate_content(
-    model="gemini-2.0-flash",
+    model="gemini-3.8-flash",
     contents=prompt
 )
 print("=== محتوای تولید شده توسط ایجنت داروسازی ===")
