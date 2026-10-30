@@ -2,17 +2,21 @@ import os
 import re
 import json
 import random
+import asyncio
 import tempfile
 from pathlib import Path
 
 import requests
+import edge_tts
+import arabic_reshaper
+from bidi.algorithm import get_display
 from google import genai
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 from moviepy.editor import (
     ImageClip,
-    concatenate_videoclips,
     AudioFileClip,
     CompositeAudioClip,
+    concatenate_videoclips,
     afx,
 )
 
@@ -25,7 +29,6 @@ CUSTOM_TOPIC = os.environ.get("CUSTOM_TOPIC", "").strip()
 client = genai.Client(api_key=GOOGLE_API_KEY)
 MODEL = "gemini-3.5-flash-lite"
 
-# موضوعات پرطرفدار دارویی در ایران (اگر موضوع دستی ندهی)
 TRENDING_TOPICS = [
     "کمبود داروهای حیاتی در داروخانه‌های ایران و راه‌های مدیریت آن",
     "متفورمین و کاربردهای جدید آن فراتر از دیابت",
@@ -39,8 +42,18 @@ TRENDING_TOPICS = [
     "شربت‌های سرماخوردگی کودکان و هشدارهای مصرف",
 ]
 
-WIDTH, HEIGHT = 1080, 1920  # نسبت استوری/ریلز اینستاگرام
-SLIDE_DURATION = 4.5
+WIDTH, HEIGHT = 1080, 1920
+SLIDE_DURATION = 5.0
+
+# تصاویر پس‌زمینه مرتبط با دارو (Unsplash - رایگان)
+BG_URLS = [
+    "https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=1080&h=1920&fit=crop",
+    "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=1080&h=1920&fit=crop",
+    "https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=1080&h=1920&fit=crop",
+    "https://images.unsplash.com/photo-1585435557343-3b092031a831?w=1080&h=1920&fit=crop",
+    "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=1080&h=1920&fit=crop",
+    "https://images.unsplash.com/photo-1576602976047-174e57a47881?w=1080&h=1920&fit=crop",
+]
 
 
 def get_topic() -> str:
@@ -48,141 +61,173 @@ def get_topic() -> str:
         print(f"موضوع دستی: {CUSTOM_TOPIC}")
         return CUSTOM_TOPIC
     topic = random.choice(TRENDING_TOPICS)
-    print(f"موضوع روز (پرطرفدار): {topic}")
+    print(f"موضوع روز: {topic}")
     return topic
 
 
 def generate_content_package(topic: str) -> dict:
-    """تولید بسته کامل محتوایی برای اینستاگرام با جمینای"""
     prompt = f"""
 تو یک استراتژیست محتوای تخصصی داروسازی برای اینستاگرام در ایران هستی.
 موضوع: «{topic}»
 
-خروجی را فقط و فقط به صورت JSON معتبر (بدون توضیح اضافه) با این ساختار بده:
+خروجی را فقط به صورت JSON معتبر بده (بدون متن اضافه):
 {{
-  "caption": "کپشن کامل پست اینستاگرام (۳ تا ۵ پاراگراف، جذاب، علمی و غیرتبلیغاتی درمانی، با دعوت به کامنت)",
-  "hashtags": "۱۰ تا ۱۵ هشتگ فارسی و انگلیسی مرتبط در یک خط",
-  "story_text": "متن کوتاه استوری (حداکثر ۲ خط)",
+  "caption": "کپشن کامل پست (۳ تا ۵ پاراگراف علمی، جذاب، غیرتبلیغاتی درمانی)",
+  "hashtags": "۱۲ هشتگ فارسی و انگلیسی در یک خط",
+  "story_text": "متن کوتاه استوری حداکثر ۲ خط",
   "slides": [
-    {{"title": "عنوان کوتاه اسلاید ۱", "body": "متن اصلی اسلاید ۱ (حداکثر ۳۰ کلمه، واضح و خوانا)"}},
-    {{"title": "عنوان اسلاید ۲", "body": "متن اسلاید ۲"}},
-    {{"title": "عنوان اسلاید ۳", "body": "متن اسلاید ۳"}},
-    {{"title": "عنوان اسلاید ۴", "body": "متن اسلاید ۴"}},
-    {{"title": "نتیجه‌گیری", "body": "جمع‌بندی و دعوت به فالو/کامنت"}}
+    {{"title": "عنوان کوتاه اسلاید ۱", "body": "متن واضح حداکثر ۲۵ کلمه"}},
+    {{"title": "عنوان اسلاید ۲", "body": "متن واضح حداکثر ۲۵ کلمه"}},
+    {{"title": "عنوان اسلاید ۳", "body": "متن واضح حداکثر ۲۵ کلمه"}},
+    {{"title": "عنوان اسلاید ۴", "body": "متن واضح حداکثر ۲۵ کلمه"}},
+    {{"title": "جمع‌بندی", "body": "نتیجه و دعوت به تعامل حداکثر ۲۵ کلمه"}}
   ],
-  "reel_script": "اسکریپت کوتاه ریلز ۳۰-۴۵ ثانیه‌ای به صورت گفتاری",
-  "music_mood": "پیشنهاد حال و هوای موزیک (مثلاً آرام و حرفه‌ای)"
+  "narration": "متن نریشن پیوسته برای کل ویدیو (۸۰ تا ۱۲۰ کلمه، گفتاری و روان، مناسب خواندن با صدای گوینده)",
+  "music_mood": "آرام و حرفه‌ای"
 }}
-
-قوانین:
-- لحن رسمی، علمی و قابل اعتماد باشد.
-- هیچ توصیه درمانی قطعی نده.
-- متن‌ها کاملاً فارسی و روان باشند.
-- JSON خالص برگردان.
+قوانین: فارسی روان، بدون توصیه درمانی قطعی، JSON خالص.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
     text = response.text.strip()
-    # استخراج JSON از پاسخ
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
-        raise ValueError("پاسخ جمینای JSON معتبر نبود")
-    data = json.loads(match.group())
-    return data
+        raise ValueError("JSON معتبر از جمینای دریافت نشد")
+    return json.loads(match.group())
 
 
-def find_font(size: int):
-    """فونت مناسب فارسی"""
-    candidates = [
-        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+def fa(text: str) -> str:
+    """آماده‌سازی متن فارسی برای نمایش صحیح (RTL + اتصال حروف)"""
+    if not text:
+        return ""
+    reshaped = arabic_reshaper.reshape(str(text))
+    return get_display(reshaped)
+
+
+def load_font(size: int, bold: bool = False):
+    base = Path("fonts")
+    candidates = []
+    if bold:
+        candidates.append(base / "Vazirmatn-Bold.ttf")
+    candidates += [
+        base / "Vazirmatn-Regular.ttf",
+        Path("/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     ]
-    for path in candidates:
-        if os.path.exists(path):
+    for p in candidates:
+        if p.exists():
             try:
-                return ImageFont.truetype(path, size)
+                return ImageFont.truetype(str(p), size)
             except Exception:
                 continue
     return ImageFont.load_default()
 
 
-def wrap_text(text: str, font, max_width: int, draw) -> list:
-    """شکستن متن فارسی به خطوط"""
-    words = text.split()
-    lines = []
-    current = ""
-    for word in words:
-        test = (current + " " + word).strip()
-        bbox = draw.textbbox((0, 0), test, font=font)
+def wrap_fa(text: str, font, max_width: int, draw) -> list:
+    words = str(text).split()
+    lines, current = [], ""
+    for w in words:
+        test = (current + " " + w).strip()
+        # برای اندازه‌گیری از نسخه reshapeشده استفاده می‌کنیم
+        bbox = draw.textbbox((0, 0), fa(test), font=font)
         if bbox[2] - bbox[0] <= max_width:
             current = test
         else:
             if current:
                 lines.append(current)
-            current = word
+            current = w
     if current:
         lines.append(current)
-    return lines or [text]
+    return lines or [str(text)]
 
 
-def create_slide_image(title: str, body: str, index: int, total: int, out_path: str):
-    """ساخت تصویر اسلاید حرفه‌ای با متن خوانا"""
-    # پس‌زمینه گرادیان تیره داروخانه‌ای
-    img = Image.new("RGB", (WIDTH, HEIGHT), (15, 32, 48))
+def download_background(index: int, path: str) -> bool:
+    url = BG_URLS[index % len(BG_URLS)]
+    try:
+        r = requests.get(url, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200 and len(r.content) > 5000:
+            with open(path, "wb") as f:
+                f.write(r.content)
+            return True
+    except Exception as e:
+        print(f"خطا در دانلود پس‌زمینه: {e}")
+    return False
+
+
+def create_slide_image(title: str, body: str, index: int, total: int, out_path: str, bg_path: str = None):
+    """اسلاید با پس‌زمینه دارویی + کارت متن در پایین"""
+    # پس‌زمینه
+    if bg_path and os.path.exists(bg_path):
+        bg = Image.open(bg_path).convert("RGB")
+        bg = bg.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+        # کمی تیره و محو برای خوانایی متن
+        bg = ImageEnhance.Brightness(bg).enhance(0.55)
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=1.2))
+    else:
+        bg = Image.new("RGB", (WIDTH, HEIGHT), (12, 28, 42))
+
+    img = bg.copy()
+    draw = ImageDraw.Draw(img, "RGBA")
+
+    # لایه تیره پایین برای کارت متن
+    card_top = int(HEIGHT * 0.58)
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    odraw.rectangle([0, card_top, WIDTH, HEIGHT], fill=(10, 25, 40, 210))
+    # نوار رنگی بالای کارت
+    odraw.rectangle([0, card_top, WIDTH, card_top + 8], fill=(0, 180, 160, 255))
+    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)
 
-    # نوار رنگی بالا
-    draw.rectangle([0, 0, WIDTH, 18], fill=(0, 150, 136))
-    # نوار پایین
-    draw.rectangle([0, HEIGHT - 18, WIDTH, HEIGHT], fill=(0, 150, 136))
+    title_font = load_font(54, bold=True)
+    body_font = load_font(42)
+    footer_font = load_font(28)
 
-    title_font = find_font(64)
-    body_font = find_font(48)
-    footer_font = find_font(32)
-
-    margin = 90
-    max_text_width = WIDTH - 2 * margin
+    margin = 70
+    max_w = WIDTH - 2 * margin
+    y = card_top + 40
 
     # شماره اسلاید
-    badge = f"{index}/{total}"
-    draw.text((WIDTH - margin - 80, 50), badge, font=footer_font, fill=(0, 200, 180))
+    badge = fa(f"{index} / {total}")
+    draw.text((margin, card_top + 16), badge, font=footer_font, fill=(0, 200, 180))
 
     # عنوان
-    y = 220
-    title_lines = wrap_text(title, title_font, max_text_width, draw)
-    for line in title_lines:
-        bbox = draw.textbbox((0, 0), line, font=title_font)
+    for line in wrap_fa(title, title_font, max_w, draw):
+        line_fa = fa(line)
+        bbox = draw.textbbox((0, 0), line_fa, font=title_font)
         w = bbox[2] - bbox[0]
-        draw.text(((WIDTH - w) // 2, y), line, font=title_font, fill=(255, 255, 255))
-        y += 85
-
-    y += 40
-    # خط جداکننده
-    draw.line([(margin, y), (WIDTH - margin, y)], fill=(0, 150, 136), width=3)
-    y += 60
-
-    # متن بدنه
-    body_lines = wrap_text(body, body_font, max_text_width, draw)
-    for line in body_lines:
-        bbox = draw.textbbox((0, 0), line, font=body_font)
-        w = bbox[2] - bbox[0]
-        draw.text(((WIDTH - w) // 2, y), line, font=body_font, fill=(220, 230, 240))
+        draw.text(((WIDTH - w) // 2, y), line_fa, font=title_font, fill=(255, 255, 255))
         y += 70
 
-    # فوتر برند
-    footer = "داروخانه دکتر مسعودیان | @drhrmasoudian"
+    y += 10
+    # متن بدنه
+    for line in wrap_fa(body, body_font, max_w, draw):
+        line_fa = fa(line)
+        bbox = draw.textbbox((0, 0), line_fa, font=body_font)
+        w = bbox[2] - bbox[0]
+        draw.text(((WIDTH - w) // 2, y), line_fa, font=body_font, fill=(220, 230, 240))
+        y += 58
+
+    # فوتر
+    footer = fa("داروخانه دکتر مسعودیان  |  @drhrmasoudian")
     bbox = draw.textbbox((0, 0), footer, font=footer_font)
     w = bbox[2] - bbox[0]
-    draw.text(((WIDTH - w) // 2, HEIGHT - 100), footer, font=footer_font, fill=(120, 160, 170))
+    draw.text(((WIDTH - w) // 2, HEIGHT - 70), footer, font=footer_font, fill=(140, 180, 190))
 
     img.save(out_path, quality=95)
-    print(f"اسلاید ساخته شد: {out_path}")
+    print(f"اسلاید {index} ساخته شد")
 
 
-def download_soft_music(path: str):
-    """دانلود یک موزیک پس‌زمینه کوتاه و آزاد (یا ساخت سکوت نرم در صورت شکست)"""
-    # فایل کوتاه آزاد از منابع عمومی (در صورت شکست، ویدیو بدون صدا ساخته می‌شود)
+async def make_narration(text: str, out_path: str):
+    """نریشن فارسی با edge-tts"""
+    # صداهای فارسی مایکروسافت
+    voices = ["fa-IR-DilaraNeural", "fa-IR-FaridNeural"]
+    voice = voices[0]
+    communicate = edge_tts.Communicate(text, voice=voice, rate="-5%")
+    await communicate.save(out_path)
+    print(f"نریشن ساخته شد: {out_path}")
+
+
+def download_soft_music(path: str) -> bool:
     urls = [
         "https://cdn.pixabay.com/download/audio/2022/03/15/audio_2bafa8c5f0.mp3?filename=soft-background-112199.mp3",
         "https://cdn.pixabay.com/download/audio/2021/08/04/audio_12b0c7443c.mp3?filename=relaxing-145038.mp3",
@@ -193,35 +238,46 @@ def download_soft_music(path: str):
             if r.status_code == 200 and len(r.content) > 10000:
                 with open(path, "wb") as f:
                     f.write(r.content)
-                print("موزیک پس‌زمینه دانلود شد")
                 return True
-        except Exception as e:
-            print(f"خطا در دانلود موزیک: {e}")
-    print("موزیک دانلود نشد؛ ویدیو بدون صدا ساخته می‌شود")
+        except Exception:
+            pass
     return False
 
 
-def build_slideshow_video(slide_paths: list, music_path: str, output_path: str):
-    """ساخت ویدیو اسلایدشویی با موزیک"""
-    clips = []
-    for p in slide_paths:
-        clip = ImageClip(p).set_duration(SLIDE_DURATION).fadein(0.4).fadeout(0.4)
-        clips.append(clip)
-
+def build_video(slide_paths, narration_path, music_path, output_path):
+    clips = [
+        ImageClip(p).set_duration(SLIDE_DURATION).fadein(0.35).fadeout(0.35)
+        for p in slide_paths
+    ]
     video = concatenate_videoclips(clips, method="compose")
+
+    audio_clips = []
+    if narration_path and os.path.exists(narration_path):
+        try:
+            nar = AudioFileClip(narration_path)
+            # اگر نریشن کوتاه‌تر/بلندتر از ویدیو بود تنظیم کن
+            if nar.duration < video.duration:
+                # سکوت اضافه نمی‌کنیم؛ ویدیو را به طول نریشن نزدیک می‌کنیم
+                pass
+            else:
+                nar = nar.subclip(0, video.duration)
+            audio_clips.append(nar.volumex(1.0))
+        except Exception as e:
+            print(f"خطا نریشن: {e}")
 
     if music_path and os.path.exists(music_path):
         try:
-            audio = AudioFileClip(music_path)
-            # حلقه یا برش موزیک به طول ویدیو
-            if audio.duration < video.duration:
-                audio = afx.audio_loop(audio, duration=video.duration)
+            bgm = AudioFileClip(music_path)
+            if bgm.duration < video.duration:
+                bgm = afx.audio_loop(bgm, duration=video.duration)
             else:
-                audio = audio.subclip(0, video.duration)
-            audio = audio.volumex(0.25)  # صدای آرام پس‌زمینه
-            video = video.set_audio(audio)
+                bgm = bgm.subclip(0, video.duration)
+            audio_clips.append(bgm.volumex(0.18))
         except Exception as e:
-            print(f"خطا در افزودن موزیک: {e}")
+            print(f"خطا موزیک: {e}")
+
+    if audio_clips:
+        video = video.set_audio(CompositeAudioClip(audio_clips))
 
     video.write_videofile(
         output_path,
@@ -232,48 +288,28 @@ def build_slideshow_video(slide_paths: list, music_path: str, output_path: str):
         threads=2,
         logger=None,
     )
-    print(f"ویدیو ساخته شد: {output_path}")
     video.close()
+    print("ویدیو نهایی ساخته شد")
 
 
-def send_telegram_message(text: str):
+def send_message(text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    # تلگرام محدودیت طول دارد؛ در صورت نیاز تقسیم کن
-    max_len = 4000
-    chunks = [text[i : i + max_len] for i in range(0, len(text), max_len)]
-    for chunk in chunks:
+    for i in range(0, len(text), 4000):
         res = requests.post(
             url,
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": chunk},
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": text[i : i + 4000]},
             timeout=60,
         )
-        print("ارسال متن:", res.json().get("ok"))
+        print("متن:", res.json().get("ok"))
 
 
-def send_telegram_video(video_path: str, caption: str = ""):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
-    with open(video_path, "rb") as f:
-        res = requests.post(
-            url,
-            data={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "caption": caption[:1000],
-            },
-            files={"video": f},
-            timeout=180,
-        )
-    print("ارسال ویدیو:", res.json())
-
-
-def send_telegram_photos(image_paths: list):
-    """ارسال اسلایدها به صورت آلبوم"""
+def send_photos(paths):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMediaGroup"
-    media = []
-    files = {}
-    for i, path in enumerate(image_paths):
-        key = f"photo{i}"
+    media, files = [], {}
+    for i, p in enumerate(paths):
+        key = f"p{i}"
         media.append({"type": "photo", "media": f"attach://{key}"})
-        files[key] = open(path, "rb")
+        files[key] = open(p, "rb")
     try:
         res = requests.post(
             url,
@@ -281,76 +317,94 @@ def send_telegram_photos(image_paths: list):
             files=files,
             timeout=120,
         )
-        print("ارسال آلبوم تصاویر:", res.json().get("ok"))
+        print("آلبوم:", res.json().get("ok"))
     finally:
         for f in files.values():
             f.close()
 
 
+def send_video(path: str, caption: str = ""):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
+    with open(path, "rb") as f:
+        res = requests.post(
+            url,
+            data={"chat_id": TELEGRAM_CHAT_ID, "caption": caption[:1000]},
+            files={"video": f},
+            timeout=180,
+        )
+    print("ویدیو:", res.json().get("ok"), res.json().get("description", ""))
+
+
 def main():
     topic = get_topic()
-    print("در حال تولید محتوا با جمینای...")
+    print("تولید محتوا...")
     package = generate_content_package(topic)
+    slides = package.get("slides", [])[:5]
+    if not slides:
+        raise ValueError("اسلایدی تولید نشد")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        slides = package.get("slides", [])[:5]
-        if not slides:
-            raise ValueError("اسلایدی تولید نشد")
-
         slide_paths = []
+
         for i, s in enumerate(slides, 1):
-            path = str(tmp / f"slide_{i}.jpg")
+            bg_file = str(tmp / f"bg_{i}.jpg")
+            download_background(i - 1, bg_file)
+            out = str(tmp / f"slide_{i}.jpg")
             create_slide_image(
                 title=s.get("title", f"اسلاید {i}"),
                 body=s.get("body", ""),
                 index=i,
                 total=len(slides),
-                out_path=path,
+                out_path=out,
+                bg_path=bg_file,
             )
-            slide_paths.append(path)
+            slide_paths.append(out)
+
+        # نریشن
+        narration_text = package.get("narration") or " ".join(
+            f"{s.get('title', '')}. {s.get('body', '')}" for s in slides
+        )
+        nar_path = str(tmp / "narration.mp3")
+        try:
+            asyncio.run(make_narration(narration_text, nar_path))
+        except Exception as e:
+            print(f"نریشن ساخته نشد: {e}")
+            nar_path = ""
 
         music_path = str(tmp / "bgm.mp3")
         has_music = download_soft_music(music_path)
 
-        video_path = str(tmp / "instagram_slideshow.mp4")
-        build_slideshow_video(
+        video_path = str(tmp / "instagram_reel.mp4")
+        build_video(
             slide_paths,
+            nar_path,
             music_path if has_music else "",
             video_path,
         )
 
-        # متن کامل برای کپی در اینستاگرام
-        full_text = f"""✅ بسته محتوای اینستاگرام آماده شد
+        full_text = f"""✅ بسته جدید اینستاگرام (نسخه بهبودیافته)
 
 📌 موضوع: {topic}
 
-——— کپشن پست ———
+——— کپشن ———
 {package.get('caption', '')}
 
 {package.get('hashtags', '')}
 
-——— متن استوری ———
+——— استوری ———
 {package.get('story_text', '')}
 
-——— اسکریپت ریلز ———
-{package.get('reel_script', '')}
+——— متن نریشن ———
+{narration_text}
 
-——— حال موزیک پیشنهادی ———
-{package.get('music_mood', 'آرام و حرفه‌ای')}
-
-🎬 ویدیو اسلایدشویی + تصاویر جداگانه هم ارسال شد.
-فقط کپی کن و در اینستاگرام منتشر کن.
+🎬 ویدیو اسلایدشویی با نریشن + آلبوم تصاویر ارسال شد.
 """
+        send_message(full_text)
+        send_photos(slide_paths)
+        send_video(video_path, caption="🎬 ریلز اسلایدشویی با نریشن آماده انتشار")
 
-        send_telegram_message(full_text)
-        send_telegram_photos(slide_paths)
-        send_telegram_video(
-            video_path,
-            caption="🎬 ویدیو اسلایدشویی آماده انتشار در اینستاگرام",
-        )
-
-    print("✅ همه مراحل با موفقیت انجام شد")
+    print("✅ تمام")
 
 
 if __name__ == "__main__":
