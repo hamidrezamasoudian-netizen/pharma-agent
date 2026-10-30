@@ -3,15 +3,15 @@ import re
 import json
 import random
 import asyncio
+import hashlib
 import tempfile
 from pathlib import Path
-from urllib.parse import quote
 
 import requests
 import edge_tts
 import arabic_reshaper
 from google import genai
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance, ImageOps
 from moviepy.editor import (
     ImageClip,
     AudioFileClip,
@@ -20,7 +20,6 @@ from moviepy.editor import (
     afx,
 )
 
-# ===================== تنظیمات =====================
 GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -45,67 +44,10 @@ TRENDING_TOPICS = [
 WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
+HEADERS = {"User-Agent": "PharmaAgent/1.0 (educational; github actions)"}
 
-HEADERS = {"User-Agent": "PharmaAgent/1.0 (educational content bot)"}
-
-# تصاویر مستقیم و مرتبط برای داروهای رایج (پشتیبان دقیق)
-DRUG_IMAGE_MAP = {
-    "metformin": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Metformin_500mg_Tablets.jpg/1280px-Metformin_500mg_Tablets.jpg",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Metformin.jpg/1024px-Metformin.jpg",
-    ],
-    "insulin": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Insulin_vial.jpg/1024px-Insulin_vial.jpg",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Insulin_pen.jpg/1024px-Insulin_pen.jpg",
-    ],
-    "vitamin d": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Vitamin_D_capsules.jpg/1024px-Vitamin_D_capsules.jpg",
-    ],
-    "omega": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Omega-3_fish_oil_capsules.jpg/1024px-Omega-3_fish_oil_capsules.jpg",
-    ],
-    "antibiotic": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Amoxicillin_capsules.jpg/1024px-Amoxicillin_capsules.jpg",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Antibiotics.jpg/1024px-Antibiotics.jpg",
-    ],
-    "syringe": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Syringe.jpg/1024px-Syringe.jpg",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Injection_syringe.jpg/1024px-Injection_syringe.jpg",
-    ],
-    "injection": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Syringe.jpg/1024px-Syringe.jpg",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Ampoule.jpg/800px-Ampoule.jpg",
-    ],
-    "ampoule": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Ampoule.jpg/800px-Ampoule.jpg",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Glass_ampoule.jpg/800px-Glass_ampoule.jpg",
-    ],
-    "tablet": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
-    ],
-    "capsule": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Capsules.jpg/1024px-Capsules.jpg",
-    ],
-    "pharmacy": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Pharmacy.jpg/1280px-Pharmacy.jpg",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Drugstore.jpg/1280px-Drugstore.jpg",
-    ],
-    "blood pressure": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Sphygmomanometer.jpg/1024px-Sphygmomanometer.jpg",
-    ],
-    "depression": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
-    ],
-    "cold": [
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Cough_syrup.jpg/800px-Cough_syrup.jpg",
-    ],
-}
-
-FALLBACK_BG = [
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Pharmacy.jpg/1280px-Pharmacy.jpg",
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Ampoule.jpg/800px-Ampoule.jpg",
-]
+USED_URLS = set()
+USED_HASHES = set()
 
 SOFT_MUSIC_URLS = [
     "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=empty-mind-118973.mp3",
@@ -132,44 +74,16 @@ def generate_content_package(topic: str) -> dict:
   "caption": "کپشن کامل پست (۳ تا ۵ پاراگراف علمی و جذاب)",
   "hashtags": "۱۲ هشتگ فارسی و انگلیسی",
   "story_text": "متن کوتاه استوری حداکثر ۲ خط",
+  "cover_hook": "یک جمله خیلی جذاب برای فریم اول (حداکثر ۱۲ کلمه)",
   "slides": [
-    {{
-      "title": "عنوان کوتاه ۱",
-      "body": "متن واضح حداکثر ۱۸ کلمه",
-      "narration": "۱ تا ۲ جمله گفتاری طبیعی و روان",
-      "image_query": "نام انگلیسی دقیق دارو یا شکل دارو برای جستجوی تصویر (مثال: semaglutide injection pen, metformin 500mg tablets, insulin vial, ampoule glass medicine)"
-    }},
-    {{
-      "title": "عنوان ۲",
-      "body": "متن واضح حداکثر ۱۸ کلمه",
-      "narration": "جمله گفتاری طبیعی",
-      "image_query": "exact English drug name or dosage form for image search"
-    }},
-    {{
-      "title": "عنوان ۳",
-      "body": "متن واضح حداکثر ۱۸ کلمه",
-      "narration": "جمله گفتاری طبیعی",
-      "image_query": "exact English drug/product visual query"
-    }},
-    {{
-      "title": "عنوان ۴",
-      "body": "متن واضح حداکثر ۱۸ کلمه",
-      "narration": "جمله گفتاری طبیعی",
-      "image_query": "exact English drug/product visual query"
-    }},
-    {{
-      "title": "جمع‌بندی",
-      "body": "نتیجه کوتاه",
-      "narration": "جمع‌بندی گرم و دعوت به تعامل",
-      "image_query": "pharmacy medicines shelves"
-    }}
+    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه", "image_query": "کوئری انگلیسی خیلی خاص برای تصویر کاور (نام دارو + شکل)"}},
+    {{"title": "عنوان ۲", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی", "image_query": "کوئری انگلیسی متفاوت اسلاید ۲"}},
+    {{"title": "عنوان ۳", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی", "image_query": "کوئری انگلیسی متفاوت اسلاید ۳"}},
+    {{"title": "عنوان ۴", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی", "image_query": "کوئری انگلیسی متفاوت اسلاید ۴"}},
+    {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم", "image_query": "کوئری انگلیسی متفاوت اسلاید ۵"}}
   ]
 }}
-قوانین مهم برای image_query:
-- حتما نام انگلیسی دارو یا شکل دارویی واقعی باشد (tablets, capsules, ampoule, syringe, insulin pen)
-- از کلمات کلی مثل healthcare یا wellness به‌تنهایی استفاده نکن
-- اگر موضوع آمپول لاغری است بنویس: GLP-1 injection pen یا semaglutide pen یا liraglutide injection
-فقط JSON.
+هر image_query باید متفاوت باشد. نام دارو + شکل (tablets/capsules/ampoule/pen). فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
     text = response.text.strip()
@@ -221,18 +135,30 @@ def wrap_fa(text: str, font, max_width: int, draw) -> list:
     return lines or [str(text)]
 
 
+def file_hash(path: str) -> str:
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        h.update(f.read())
+    return h.hexdigest()
+
+
 def download_image(url: str, path: str) -> bool:
+    if url in USED_URLS:
+        return False
     try:
         r = requests.get(url, timeout=45, headers=HEADERS, allow_redirects=True)
-        if r.status_code == 200 and len(r.content) > 4000:
-            ctype = r.headers.get("Content-Type", "")
-            if "html" in ctype.lower():
+        if r.status_code == 200 and len(r.content) > 5000:
+            if "html" in r.headers.get("Content-Type", "").lower():
                 return False
             with open(path, "wb") as f:
                 f.write(r.content)
             try:
-                im = Image.open(path)
-                im.verify()
+                Image.open(path).verify()
+                digest = file_hash(path)
+                if digest in USED_HASHES:
+                    return False
+                USED_URLS.add(url)
+                USED_HASHES.add(digest)
                 return True
             except Exception:
                 return False
@@ -241,168 +167,194 @@ def download_image(url: str, path: str) -> bool:
     return False
 
 
-def search_wikimedia(query: str, limit: int = 6) -> list:
-    """جستجوی تصویر در ویکی‌مدیا کامانز"""
+def search_wikimedia(query: str, limit: int = 8) -> list:
     try:
-        api = "https://commons.wikimedia.org/w/api.php"
         params = {
-            "action": "query",
-            "format": "json",
-            "generator": "search",
-            "gsrnamespace": 6,
-            "gsrsearch": query,
-            "gsrlimit": limit,
-            "prop": "imageinfo",
-            "iiprop": "url|mime|size",
-            "iiurlwidth": 1280,
+            "action": "query", "format": "json", "generator": "search",
+            "gsrnamespace": 6, "gsrsearch": query, "gsrlimit": limit,
+            "prop": "imageinfo", "iiprop": "url|mime|size", "iiurlwidth": 1280,
         }
-        r = requests.get(api, params=params, headers=HEADERS, timeout=30)
-        data = r.json()
-        pages = data.get("query", {}).get("pages", {})
+        r = requests.get("https://commons.wikimedia.org/w/api.php", params=params, headers=HEADERS, timeout=30)
+        pages = r.json().get("query", {}).get("pages", {})
         urls = []
         for page in pages.values():
             info = (page.get("imageinfo") or [{}])[0]
-            mime = info.get("mime", "")
-            if not mime.startswith("image/"):
+            if not str(info.get("mime", "")).startswith("image/"):
                 continue
             url = info.get("thumburl") or info.get("url")
-            if url:
+            if url and url not in USED_URLS:
                 urls.append(url)
-        print(f"wikimedia({query}): {len(urls)} تصویر")
+        random.shuffle(urls)
+        print(f"wikimedia({query}): {len(urls)}")
         return urls
     except Exception as e:
         print(f"wikimedia error: {e}")
         return []
 
 
-def search_openverse(query: str, limit: int = 6) -> list:
-    """جستجوی تصویر آزاد در Openverse"""
+def search_openverse(query: str, limit: int = 8) -> list:
     try:
-        api = "https://api.openverse.org/v1/images/"
         params = {
-            "q": query,
-            "page_size": limit,
+            "q": query, "page_size": limit, "page": random.randint(1, 3),
             "license": "cc0,pdm,by,by-sa",
-            "category": "photograph",
         }
-        r = requests.get(api, params=params, headers=HEADERS, timeout=30)
+        r = requests.get("https://api.openverse.org/v1/images/", params=params, headers=HEADERS, timeout=30)
         if r.status_code != 200:
             return []
-        results = r.json().get("results", [])
-        urls = [item.get("url") for item in results if item.get("url")]
-        print(f"openverse({query}): {len(urls)} تصویر")
+        urls = [i.get("url") for i in r.json().get("results", []) if i.get("url") and i.get("url") not in USED_URLS]
+        random.shuffle(urls)
+        print(f"openverse({query}): {len(urls)}")
         return urls
     except Exception as e:
         print(f"openverse error: {e}")
         return []
 
 
-def mapped_drug_urls(query: str) -> list:
-    q = (query or "").lower()
-    found = []
-    for key, urls in DRUG_IMAGE_MAP.items():
-        if key in q:
-            found.extend(urls)
-    # کلیدواژه‌های فارسی موضوع هم کمک می‌کند
-    return found
+def make_gradient_fallback(path: str, seed: int = 0):
+    random.seed(seed)
+    pairs = [((0, 110, 120), (12, 28, 48)), ((30, 70, 110), (8, 22, 40)), ((70, 50, 90), (20, 18, 40))]
+    c1, c2 = pairs[seed % len(pairs)]
+    img = Image.new("RGB", (WIDTH, HEIGHT), c1)
+    draw = ImageDraw.Draw(img)
+    for y in range(HEIGHT):
+        t = y / HEIGHT
+        col = tuple(int(c1[i] * (1 - t) + c2[i] * t) for i in range(3))
+        draw.line([(0, y), (WIDTH, y)], fill=col)
+    for _ in range(14):
+        x, y = random.randint(0, WIDTH), random.randint(0, int(HEIGHT * 0.65))
+        rr = random.randint(40, 100)
+        draw.ellipse([x, y, x + rr, y + int(rr * 1.6)], outline=(255, 255, 255), width=2)
+    img.save(path, quality=90)
 
 
-def fetch_related_background(query: str, path: str, fallback_index: int) -> bool:
-    """پیدا کردن تصویر واقعاً مرتبط با دارو"""
+def fetch_related_background(query: str, path: str, slide_index: int) -> bool:
     q = (query or "medicine tablets").strip()
-    print(f"=== جستجوی تصویر برای: {q}")
-
+    print(f"=== تصویر اسلاید {slide_index + 1}: {q}")
+    variants = [q, f"{q} close up", f"{q} pharmacy", f"{q} package", f"{q} bottle"]
+    variants = variants[slide_index % len(variants):] + variants[: slide_index % len(variants)]
     candidates = []
-    # ۱) نقشه داروهای رایج
-    candidates.extend(mapped_drug_urls(q))
-    # ۲) ویکی‌مدیا با چند ترکیب جستجو
-    for term in [q, f"{q} tablet", f"{q} medicine", f"{q} pill"]:
-        candidates.extend(search_wikimedia(term, limit=4))
-        if len(candidates) >= 8:
+    for term in variants:
+        candidates.extend(search_wikimedia(term, limit=6))
+        candidates.extend(search_openverse(term, limit=5))
+        if len(candidates) >= 15:
             break
-    # ۳) Openverse
-    candidates.extend(search_openverse(q, limit=5))
-    # ۴) پشتیبان
-    candidates.append(FALLBACK_BG[fallback_index % len(FALLBACK_BG)])
-
-    # حذف تکراری با حفظ ترتیب
-    seen = set()
-    unique = []
+    seen, unique = set(), []
     for u in candidates:
-        if u and u not in seen:
+        if u and u not in seen and u not in USED_URLS:
             seen.add(u)
             unique.append(u)
-
     for url in unique:
         print(f"تلاش: {url[:90]}")
         if download_image(url, path):
-            print(f"✓ پس‌زمینه مرتبط ذخیره شد")
+            print("✓ تصویر یکتا")
             return True
-    print("✗ تصویر مرتبط پیدا نشد")
-    return False
+    print("گرادیان جایگزین")
+    make_gradient_fallback(path, seed=slide_index + abs(hash(q)) % 50)
+    return True
+
+
+def create_cover_slide(title: str, body: str, hook: str, out_path: str, bg_path: str = None):
+    if bg_path and os.path.exists(bg_path):
+        bg = Image.open(bg_path).convert("RGB")
+        bg = ImageOps.fit(bg, (WIDTH, HEIGHT), method=Image.Resampling.LANCZOS)
+        bg = ImageEnhance.Brightness(bg).enhance(0.68)
+        bg = ImageEnhance.Contrast(bg).enhance(1.2)
+    else:
+        make_gradient_fallback(out_path + ".bg.jpg", seed=7)
+        bg = Image.open(out_path + ".bg.jpg").convert("RGB")
+
+    img = bg.copy()
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    od.rectangle([0, 0, WIDTH, int(HEIGHT * 0.2)], fill=(0, 0, 0, 90))
+    od.rectangle([0, int(HEIGHT * 0.52), WIDTH, HEIGHT], fill=(0, 0, 0, 150))
+    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    title_font = load_font(72, bold=True)
+    body_font = load_font(44)
+    badge_font = load_font(32, bold=True)
+    footer_font = load_font(28)
+    margin, max_w = 60, WIDTH - 120
+
+    badge = fa("داروخانه دکتر مسعودیان")
+    bbox = draw.textbbox((0, 0), badge, font=badge_font)
+    w = bbox[2] - bbox[0]
+    draw.rounded_rectangle([WIDTH // 2 - w // 2 - 24, 80, WIDTH // 2 + w // 2 + 24, 140], radius=20, fill=(0, 150, 136))
+    draw.text(((WIDTH - w) // 2, 92), badge, font=badge_font, fill=(255, 255, 255))
+
+    y = int(HEIGHT * 0.58)
+    for line in wrap_fa(hook or title, title_font, max_w, draw):
+        lf = fa(line)
+        bbox = draw.textbbox((0, 0), lf, font=title_font)
+        w = bbox[2] - bbox[0]
+        draw.text(((WIDTH - w) // 2, y), lf, font=title_font, fill=(255, 255, 255))
+        y += 82
+    y += 8
+    for line in wrap_fa(body or title, body_font, max_w, draw):
+        lf = fa(line)
+        bbox = draw.textbbox((0, 0), lf, font=body_font)
+        w = bbox[2] - bbox[0]
+        draw.text(((WIDTH - w) // 2, y), lf, font=body_font, fill=(220, 235, 240))
+        y += 56
+
+    footer = fa("@drhrmasoudian")
+    bbox = draw.textbbox((0, 0), footer, font=footer_font)
+    w = bbox[2] - bbox[0]
+    draw.text(((WIDTH - w) // 2, HEIGHT - 70), footer, font=footer_font, fill=(180, 210, 215))
+    img.save(out_path, quality=95)
+    print("کاور ساخته شد")
 
 
 def create_slide_image(title: str, body: str, index: int, total: int, out_path: str, bg_path: str = None):
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGB")
-        bg = bg.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-        bg = ImageEnhance.Brightness(bg).enhance(0.50)
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=0.6))
+        bg = ImageOps.fit(bg, (WIDTH, HEIGHT), method=Image.Resampling.LANCZOS)
+        bg = ImageEnhance.Brightness(bg).enhance(0.58)
     else:
-        bg = Image.new("RGB", (WIDTH, HEIGHT), (12, 28, 42))
+        make_gradient_fallback(out_path + ".bg.jpg", seed=index)
+        bg = Image.open(out_path + ".bg.jpg").convert("RGB")
 
     img = bg.copy()
     card_top = int(HEIGHT * 0.78)
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    odraw = ImageDraw.Draw(overlay)
-    odraw.rectangle([0, card_top, WIDTH, HEIGHT], fill=(6, 16, 28, 230))
-    odraw.rectangle([0, card_top, WIDTH, card_top + 6], fill=(0, 180, 160, 255))
+    od = ImageDraw.Draw(overlay)
+    od.rectangle([0, card_top, WIDTH, HEIGHT], fill=(6, 16, 28, 230))
+    od.rectangle([0, card_top, WIDTH, card_top + 6], fill=(0, 180, 160, 255))
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)
 
     title_font = load_font(58, bold=True)
     body_font = load_font(46)
     footer_font = load_font(28)
-
-    margin = 56
-    max_w = WIDTH - 2 * margin
+    margin, max_w = 56, WIDTH - 112
     y = card_top + 22
 
-    badge = fa(f"{index} / {total}")
-    draw.text((margin, card_top + 10), badge, font=footer_font, fill=(0, 200, 180))
-
+    draw.text((margin, card_top + 10), fa(f"{index} / {total}"), font=footer_font, fill=(0, 200, 180))
     for line in wrap_fa(title, title_font, max_w, draw):
-        line_fa = fa(line)
-        bbox = draw.textbbox((0, 0), line_fa, font=title_font)
+        lf = fa(line)
+        bbox = draw.textbbox((0, 0), lf, font=title_font)
         w = bbox[2] - bbox[0]
-        draw.text(((WIDTH - w) // 2, y), line_fa, font=title_font, fill=(255, 255, 255))
+        draw.text(((WIDTH - w) // 2, y), lf, font=title_font, fill=(255, 255, 255))
         y += 68
-
     y += 4
     for line in wrap_fa(body, body_font, max_w, draw):
-        line_fa = fa(line)
-        bbox = draw.textbbox((0, 0), line_fa, font=body_font)
+        lf = fa(line)
+        bbox = draw.textbbox((0, 0), lf, font=body_font)
         w = bbox[2] - bbox[0]
-        draw.text(((WIDTH - w) // 2, y), line_fa, font=body_font, fill=(225, 235, 245))
+        draw.text(((WIDTH - w) // 2, y), lf, font=body_font, fill=(225, 235, 245))
         y += 56
 
     footer = fa("داروخانه دکتر مسعودیان  |  @drhrmasoudian")
     bbox = draw.textbbox((0, 0), footer, font=footer_font)
     w = bbox[2] - bbox[0]
     draw.text(((WIDTH - w) // 2, HEIGHT - 48), footer, font=footer_font, fill=(140, 180, 190))
-
     img.save(out_path, quality=95)
     print(f"اسلاید {index} ساخته شد")
 
 
 async def make_narration_file(text: str, out_path: str):
-    voice = "fa-IR-FaridNeural"
-    communicate = edge_tts.Communicate(
-        text.strip(),
-        voice=voice,
-        rate="-15%",
-        pitch="-4Hz",
-    )
+    communicate = edge_tts.Communicate(text.strip(), voice="fa-IR-FaridNeural", rate="-15%", pitch="-4Hz")
     await communicate.save(out_path)
 
 
@@ -431,53 +383,36 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
                 a.close()
             except Exception:
                 pass
-        clip = ImageClip(img_path).set_duration(dur).fadein(0.25).fadeout(0.25)
+        if i == 0:
+            clip = ImageClip(img_path).set_duration(dur).fadeout(0.25)
+        else:
+            clip = ImageClip(img_path).set_duration(dur).fadein(0.25).fadeout(0.25)
         if nar_path and os.path.exists(nar_path):
             try:
-                nar = AudioFileClip(nar_path).volumex(1.08)
-                clip = clip.set_audio(nar)
+                clip = clip.set_audio(AudioFileClip(nar_path).volumex(1.08))
             except Exception as e:
-                print(f"نریشن اسلاید {i+1}: {e}")
+                print(f"نریشن {i+1}: {e}")
         clips.append(clip)
 
     video = concatenate_videoclips(clips, method="compose")
-
     if music_path and os.path.exists(music_path):
         try:
             bgm = AudioFileClip(music_path)
-            if bgm.duration < video.duration:
-                bgm = afx.audio_loop(bgm, duration=video.duration)
-            else:
-                bgm = bgm.subclip(0, video.duration)
+            bgm = afx.audio_loop(bgm, duration=video.duration) if bgm.duration < video.duration else bgm.subclip(0, video.duration)
             bgm = bgm.volumex(0.05)
-            if video.audio is not None:
-                video = video.set_audio(CompositeAudioClip([video.audio, bgm]))
-            else:
-                video = video.set_audio(bgm)
+            video = video.set_audio(CompositeAudioClip([video.audio, bgm]) if video.audio else bgm)
         except Exception as e:
-            print(f"خطا موزیک: {e}")
+            print(f"موزیک: {e}")
 
-    video.write_videofile(
-        output_path,
-        fps=24,
-        codec="libx264",
-        audio_codec="aac",
-        preset="ultrafast",
-        threads=2,
-        logger=None,
-    )
+    video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast", threads=2, logger=None)
     video.close()
-    print("ویدیو نهایی ساخته شد")
+    print("ویدیو ساخته شد")
 
 
 def send_message(text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     for i in range(0, len(text), 4000):
-        res = requests.post(
-            url,
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": text[i : i + 4000]},
-            timeout=60,
-        )
+        res = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text[i:i+4000]}, timeout=60)
         print("متن:", res.json().get("ok"))
 
 
@@ -489,12 +424,7 @@ def send_photos(paths):
         media.append({"type": "photo", "media": f"attach://{key}"})
         files[key] = open(p, "rb")
     try:
-        res = requests.post(
-            url,
-            data={"chat_id": TELEGRAM_CHAT_ID, "media": json.dumps(media)},
-            files=files,
-            timeout=120,
-        )
+        res = requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "media": json.dumps(media)}, files=files, timeout=120)
         print("آلبوم:", res.json().get("ok"))
     finally:
         for f in files.values():
@@ -504,13 +434,8 @@ def send_photos(paths):
 def send_video(path: str, caption: str = ""):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
     with open(path, "rb") as f:
-        res = requests.post(
-            url,
-            data={"chat_id": TELEGRAM_CHAT_ID, "caption": caption[:1000]},
-            files={"video": f},
-            timeout=180,
-        )
-    print("ویدیو:", res.json().get("ok"), res.json().get("description", ""))
+        res = requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "caption": caption[:1000]}, files={"video": f}, timeout=180)
+    print("ویدیو:", res.json().get("ok"))
 
 
 def main():
@@ -520,53 +445,37 @@ def main():
     slides = package.get("slides", [])[:5]
     if not slides:
         raise ValueError("اسلایدی تولید نشد")
+    hook = package.get("cover_hook") or slides[0].get("title", "")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        slide_paths = []
-        narration_paths = []
+        slide_paths, narration_paths = [], []
 
-        for i, s in enumerate(slides, 1):
-            bg_file = str(tmp / f"bg_{i}.jpg")
-            query = s.get("image_query") or topic
-            fetch_related_background(query, bg_file, i - 1)
-
-            out = str(tmp / f"slide_{i}.jpg")
-            create_slide_image(
-                title=s.get("title", f"اسلاید {i}"),
-                body=s.get("body", ""),
-                index=i,
-                total=len(slides),
-                out_path=out,
-                bg_path=bg_file,
-            )
+        for i, s in enumerate(slides):
+            bg_file = str(tmp / f"bg_{i+1}.jpg")
+            fetch_related_background(s.get("image_query") or topic, bg_file, i)
+            out = str(tmp / f"slide_{i+1}.jpg")
+            if i == 0:
+                create_cover_slide(s.get("title", ""), s.get("body", ""), hook, out, bg_file)
+            else:
+                create_slide_image(s.get("title", f"اسلاید {i+1}"), s.get("body", ""), i + 1, len(slides), out, bg_file)
             slide_paths.append(out)
 
             nar_text = s.get("narration") or f"{s.get('title', '')}. {s.get('body', '')}"
-            nar_file = str(tmp / f"nar_{i}.mp3")
+            nar_file = str(tmp / f"nar_{i+1}.mp3")
             try:
                 asyncio.run(make_narration_file(nar_text, nar_file))
                 narration_paths.append(nar_file)
-                print(f"نریشن اسلاید {i} آماده")
             except Exception as e:
-                print(f"نریشن اسلاید {i} خطا: {e}")
+                print(f"نریشن {i+1}: {e}")
                 narration_paths.append("")
 
         music_path = str(tmp / "bgm.mp3")
         has_music = download_soft_music(music_path)
-
         video_path = str(tmp / "short_video.mp4")
-        build_video(
-            slide_paths,
-            narration_paths,
-            music_path if has_music else "",
-            video_path,
-        )
+        build_video(slide_paths, narration_paths, music_path if has_music else "", video_path)
 
-        full_nar = " ".join(
-            (s.get("narration") or f"{s.get('title', '')}. {s.get('body', '')}")
-            for s in slides
-        )
+        full_nar = " ".join((s.get("narration") or "") for s in slides)
         full_text = f"""✅ بسته اینستاگرام / یوتیوب شورت
 
 📌 موضوع: {topic}
@@ -582,14 +491,11 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🎬 ویدیو با پس‌زمینه مرتبط‌تر با دارو ارسال شد.
+🎬 کاور قوی + تصاویر یکتا
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(
-            video_path,
-            caption="🎬 نسخه جدید با تصاویر مرتبط‌تر دارویی",
-        )
+        send_video(video_path, caption="🎬 کاور جذاب + تصاویر غیرتکراری")
 
     print("✅ تمام")
 
