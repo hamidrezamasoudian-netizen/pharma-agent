@@ -42,17 +42,69 @@ TRENDING_TOPICS = [
     "شربت‌های سرماخوردگی کودکان و هشدارهای مصرف",
 ]
 
-WIDTH, HEIGHT = 1080, 1920  # مناسب ریلز اینستاگرام و شورت یوتیوب
+WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 
-# تصاویر عمومی دارویی (پشتیبان)
+HEADERS = {"User-Agent": "PharmaAgent/1.0 (educational content bot)"}
+
+# تصاویر مستقیم و مرتبط برای داروهای رایج (پشتیبان دقیق)
+DRUG_IMAGE_MAP = {
+    "metformin": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Metformin_500mg_Tablets.jpg/1280px-Metformin_500mg_Tablets.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Metformin.jpg/1024px-Metformin.jpg",
+    ],
+    "insulin": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Insulin_vial.jpg/1024px-Insulin_vial.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Insulin_pen.jpg/1024px-Insulin_pen.jpg",
+    ],
+    "vitamin d": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Vitamin_D_capsules.jpg/1024px-Vitamin_D_capsules.jpg",
+    ],
+    "omega": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Omega-3_fish_oil_capsules.jpg/1024px-Omega-3_fish_oil_capsules.jpg",
+    ],
+    "antibiotic": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Amoxicillin_capsules.jpg/1024px-Amoxicillin_capsules.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Antibiotics.jpg/1024px-Antibiotics.jpg",
+    ],
+    "syringe": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Syringe.jpg/1024px-Syringe.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Injection_syringe.jpg/1024px-Injection_syringe.jpg",
+    ],
+    "injection": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Syringe.jpg/1024px-Syringe.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Ampoule.jpg/800px-Ampoule.jpg",
+    ],
+    "ampoule": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Ampoule.jpg/800px-Ampoule.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Glass_ampoule.jpg/800px-Glass_ampoule.jpg",
+    ],
+    "tablet": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
+    ],
+    "capsule": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Capsules.jpg/1024px-Capsules.jpg",
+    ],
+    "pharmacy": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Pharmacy.jpg/1280px-Pharmacy.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Drugstore.jpg/1280px-Drugstore.jpg",
+    ],
+    "blood pressure": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Sphygmomanometer.jpg/1024px-Sphygmomanometer.jpg",
+    ],
+    "depression": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
+    ],
+    "cold": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Cough_syrup.jpg/800px-Cough_syrup.jpg",
+    ],
+}
+
 FALLBACK_BG = [
-    "https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=1080&h=1920&fit=crop",
-    "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=1080&h=1920&fit=crop",
-    "https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=1080&h=1920&fit=crop",
-    "https://images.unsplash.com/photo-1585435557343-3b092031a831?w=1080&h=1920&fit=crop",
-    "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=1080&h=1920&fit=crop",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Pharmacy.jpg/1280px-Pharmacy.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Ampoule.jpg/800px-Ampoule.jpg",
 ]
 
 SOFT_MUSIC_URLS = [
@@ -84,36 +136,40 @@ def generate_content_package(topic: str) -> dict:
     {{
       "title": "عنوان کوتاه ۱",
       "body": "متن واضح حداکثر ۱۸ کلمه",
-      "narration": "۱ تا ۲ جمله گفتاری طبیعی و روان برای همین اسلاید",
-      "image_query": "عبارت انگلیسی کوتاه برای جستجوی تصویر مرتبط (مثلا metformin tablets close up یا insulin pen injection)"
+      "narration": "۱ تا ۲ جمله گفتاری طبیعی و روان",
+      "image_query": "نام انگلیسی دقیق دارو یا شکل دارو برای جستجوی تصویر (مثال: semaglutide injection pen, metformin 500mg tablets, insulin vial, ampoule glass medicine)"
     }},
     {{
       "title": "عنوان ۲",
       "body": "متن واضح حداکثر ۱۸ کلمه",
       "narration": "جمله گفتاری طبیعی",
-      "image_query": "english image search query"
+      "image_query": "exact English drug name or dosage form for image search"
     }},
     {{
       "title": "عنوان ۳",
       "body": "متن واضح حداکثر ۱۸ کلمه",
       "narration": "جمله گفتاری طبیعی",
-      "image_query": "english image search query"
+      "image_query": "exact English drug/product visual query"
     }},
     {{
       "title": "عنوان ۴",
       "body": "متن واضح حداکثر ۱۸ کلمه",
       "narration": "جمله گفتاری طبیعی",
-      "image_query": "english image search query"
+      "image_query": "exact English drug/product visual query"
     }},
     {{
       "title": "جمع‌بندی",
       "body": "نتیجه کوتاه",
       "narration": "جمع‌بندی گرم و دعوت به تعامل",
-      "image_query": "pharmacy professional healthcare"
+      "image_query": "pharmacy medicines shelves"
     }}
   ]
 }}
-قوانین: فارسی روان، نریشن محاوره‌ای مودبانه، بدون توصیه درمانی قطعی، image_query حتما انگلیسی و مرتبط با همان دارو/موضوع اسلاید، فقط JSON.
+قوانین مهم برای image_query:
+- حتما نام انگلیسی دارو یا شکل دارویی واقعی باشد (tablets, capsules, ampoule, syringe, insulin pen)
+- از کلمات کلی مثل healthcare یا wellness به‌تنهایی استفاده نکن
+- اگر موضوع آمپول لاغری است بنویس: GLP-1 injection pen یا semaglutide pen یا liraglutide injection
+فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
     text = response.text.strip()
@@ -167,35 +223,122 @@ def wrap_fa(text: str, font, max_width: int, draw) -> list:
 
 def download_image(url: str, path: str) -> bool:
     try:
-        r = requests.get(url, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code == 200 and len(r.content) > 5000:
+        r = requests.get(url, timeout=45, headers=HEADERS, allow_redirects=True)
+        if r.status_code == 200 and len(r.content) > 4000:
+            ctype = r.headers.get("Content-Type", "")
+            if "html" in ctype.lower():
+                return False
             with open(path, "wb") as f:
                 f.write(r.content)
-            return True
+            try:
+                im = Image.open(path)
+                im.verify()
+                return True
+            except Exception:
+                return False
     except Exception as e:
-        print(f"دانلود تصویر خطا: {e}")
+        print(f"دانلود خطا: {e}")
     return False
 
 
-def fetch_related_background(query: str, path: str, fallback_index: int) -> bool:
-    """جستجوی تصویر مرتبط با دارو از Unsplash Source / LoremFlickr"""
-    q = (query or "pharmacy medicine").strip()
-    q_encoded = quote(q)
-    candidates = [
-        f"https://loremflickr.com/1080/1920/{q_encoded.replace('%20', ',')}",
-        f"https://source.unsplash.com/1080x1920/?{q_encoded}",
-        FALLBACK_BG[fallback_index % len(FALLBACK_BG)],
-    ]
-    for url in candidates:
-        print(f"تلاش پس‌زمینه: {url[:80]}...")
-        if download_image(url, path):
-            # اعتبارسنجی باز شدن با PIL
-            try:
-                Image.open(path).verify()
-                print(f"پس‌زمینه مرتبط ذخیره شد برای: {q}")
-                return True
-            except Exception:
+def search_wikimedia(query: str, limit: int = 6) -> list:
+    """جستجوی تصویر در ویکی‌مدیا کامانز"""
+    try:
+        api = "https://commons.wikimedia.org/w/api.php"
+        params = {
+            "action": "query",
+            "format": "json",
+            "generator": "search",
+            "gsrnamespace": 6,
+            "gsrsearch": query,
+            "gsrlimit": limit,
+            "prop": "imageinfo",
+            "iiprop": "url|mime|size",
+            "iiurlwidth": 1280,
+        }
+        r = requests.get(api, params=params, headers=HEADERS, timeout=30)
+        data = r.json()
+        pages = data.get("query", {}).get("pages", {})
+        urls = []
+        for page in pages.values():
+            info = (page.get("imageinfo") or [{}])[0]
+            mime = info.get("mime", "")
+            if not mime.startswith("image/"):
                 continue
+            url = info.get("thumburl") or info.get("url")
+            if url:
+                urls.append(url)
+        print(f"wikimedia({query}): {len(urls)} تصویر")
+        return urls
+    except Exception as e:
+        print(f"wikimedia error: {e}")
+        return []
+
+
+def search_openverse(query: str, limit: int = 6) -> list:
+    """جستجوی تصویر آزاد در Openverse"""
+    try:
+        api = "https://api.openverse.org/v1/images/"
+        params = {
+            "q": query,
+            "page_size": limit,
+            "license": "cc0,pdm,by,by-sa",
+            "category": "photograph",
+        }
+        r = requests.get(api, params=params, headers=HEADERS, timeout=30)
+        if r.status_code != 200:
+            return []
+        results = r.json().get("results", [])
+        urls = [item.get("url") for item in results if item.get("url")]
+        print(f"openverse({query}): {len(urls)} تصویر")
+        return urls
+    except Exception as e:
+        print(f"openverse error: {e}")
+        return []
+
+
+def mapped_drug_urls(query: str) -> list:
+    q = (query or "").lower()
+    found = []
+    for key, urls in DRUG_IMAGE_MAP.items():
+        if key in q:
+            found.extend(urls)
+    # کلیدواژه‌های فارسی موضوع هم کمک می‌کند
+    return found
+
+
+def fetch_related_background(query: str, path: str, fallback_index: int) -> bool:
+    """پیدا کردن تصویر واقعاً مرتبط با دارو"""
+    q = (query or "medicine tablets").strip()
+    print(f"=== جستجوی تصویر برای: {q}")
+
+    candidates = []
+    # ۱) نقشه داروهای رایج
+    candidates.extend(mapped_drug_urls(q))
+    # ۲) ویکی‌مدیا با چند ترکیب جستجو
+    for term in [q, f"{q} tablet", f"{q} medicine", f"{q} pill"]:
+        candidates.extend(search_wikimedia(term, limit=4))
+        if len(candidates) >= 8:
+            break
+    # ۳) Openverse
+    candidates.extend(search_openverse(q, limit=5))
+    # ۴) پشتیبان
+    candidates.append(FALLBACK_BG[fallback_index % len(FALLBACK_BG)])
+
+    # حذف تکراری با حفظ ترتیب
+    seen = set()
+    unique = []
+    for u in candidates:
+        if u and u not in seen:
+            seen.add(u)
+            unique.append(u)
+
+    for url in unique:
+        print(f"تلاش: {url[:90]}")
+        if download_image(url, path):
+            print(f"✓ پس‌زمینه مرتبط ذخیره شد")
+            return True
+    print("✗ تصویر مرتبط پیدا نشد")
     return False
 
 
@@ -203,14 +346,12 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGB")
         bg = bg.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-        bg = ImageEnhance.Brightness(bg).enhance(0.48)
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=0.8))
+        bg = ImageEnhance.Brightness(bg).enhance(0.50)
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=0.6))
     else:
         bg = Image.new("RGB", (WIDTH, HEIGHT), (12, 28, 42))
 
     img = bg.copy()
-
-    # کارت متن خیلی پایین‌تر (~۷۸٪)
     card_top = int(HEIGHT * 0.78)
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     odraw = ImageDraw.Draw(overlay)
@@ -219,7 +360,6 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)
 
-    # فونت درشت‌تر
     title_font = load_font(58, bold=True)
     body_font = load_font(46)
     footer_font = load_font(28)
@@ -256,14 +396,12 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
 
 
 async def make_narration_file(text: str, out_path: str):
-    """نریشن مردانه، ملایم و روان‌تر"""
-    # صدای مردانه فارسی
     voice = "fa-IR-FaridNeural"
     communicate = edge_tts.Communicate(
         text.strip(),
         voice=voice,
-        rate="-15%",   # آرام‌تر و طبیعی‌تر
-        pitch="-4Hz",  # کمی بم‌تر و ملایم
+        rate="-15%",
+        pitch="-4Hz",
     )
     await communicate.save(out_path)
 
@@ -329,7 +467,7 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
         logger=None,
     )
     video.close()
-    print("ویدیو نهایی ساخته شد (مناسب ریلز و یوتیوب شورت)")
+    print("ویدیو نهایی ساخته شد")
 
 
 def send_message(text: str):
@@ -409,7 +547,7 @@ def main():
             try:
                 asyncio.run(make_narration_file(nar_text, nar_file))
                 narration_paths.append(nar_file)
-                print(f"نریشن مردانه اسلاید {i} آماده")
+                print(f"نریشن اسلاید {i} آماده")
             except Exception as e:
                 print(f"نریشن اسلاید {i} خطا: {e}")
                 narration_paths.append("")
@@ -444,13 +582,13 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🎬 ویدیو عمودی 1080x1920 (مناسب ریلز و یوتیوب شورت) ارسال شد.
+🎬 ویدیو با پس‌زمینه مرتبط‌تر با دارو ارسال شد.
 """
         send_message(full_text)
         send_photos(slide_paths)
         send_video(
             video_path,
-            caption="🎬 آماده انتشار در اینستاگرام ریلز و یوتیوب شورت",
+            caption="🎬 نسخه جدید با تصاویر مرتبط‌تر دارویی",
         )
 
     print("✅ تمام")
