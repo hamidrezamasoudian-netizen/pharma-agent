@@ -46,78 +46,64 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/2.2 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/2.3 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
 USED_URLS = set()
 USED_HASHES = set()
 CURRENT_TOPIC = ""
+ACTIVE_CATEGORY = "tablets"
 
 
 def wiki(name: str, width: int = 1280) -> str:
     return f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(name)}?width={width}"
 
 
-# فقط فایل‌های مشخص و تأییدشده دارویی (نه نام‌های کلی که ممکن است سفال/لامپ باشند)
+# هر دسته فقط تصاویر همان دارو/شکل — بدون قاطی شدن با داروهای دیگر
 IMAGE_POOL = {
+    "metformin": [
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),  # یک فایل اصلی؛ تنوع با برش متفاوت در اسلایدها
+    ],
     "insulin": [
         wiki("Insulin syringe foto.jpg"),
         wiki("Insulin syringe in disassembled form.jpg"),
         wiki("Baxa syringe.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),
-        wiki("Medicine Health.jpg"),
-    ],
-    "metformin": [
-        wiki("Metformin 500mg Tablets.jpg"),
-        wiki("Medicine Health.jpg"),
-        wiki("Robenacoxib blister package.jpg"),
-        wiki("Anterone (cyproterone acetate) tablets in Australia, with three blister packs.jpg"),
     ],
     "injection": [
-        wiki("Insulin syringe foto.jpg"),
-        wiki("Baxa syringe.jpg"),
         wiki("Dantrolene Ampoule.JPG"),
         wiki("Diazepam Ampulle ratiopharm 10 mg. 2 ml.JPG"),
         wiki("Ampoule, iodine (AM 1999.114.3-1).jpg"),
+        wiki("Insulin syringe foto.jpg"),
+        wiki("Baxa syringe.jpg"),
     ],
     "tablets": [
         wiki("Metformin 500mg Tablets.jpg"),
-        wiki("Medicine Health.jpg"),
         wiki("Robenacoxib blister package.jpg"),
         wiki("Anterone (cyproterone acetate) tablets in Australia, with three blister packs.jpg"),
         wiki("Zumenon (estradiol hemihydrate) tablets in Australia, with one opened blister pack and one unopened blister pack.jpg"),
+        wiki("Medicine Health.jpg"),
     ],
     "capsules": [
         wiki("Medicine Health.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),
         wiki("Robenacoxib blister package.jpg"),
-        wiki("Cough medicine.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
     ],
     "vitamin": [
         wiki("Medicine Health.jpg"),
-        wiki("Cough medicine.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),
         wiki("Robenacoxib blister package.jpg"),
+        wiki("Cough medicine.jpg"),
     ],
     "antibiotic": [
+        wiki("Robenacoxib blister package.jpg"),
         wiki("Medicine Health.jpg"),
         wiki("Metformin 500mg Tablets.jpg"),
-        wiki("Robenacoxib blister package.jpg"),
-        wiki("Cough medicine.jpg"),
-    ],
-    "pharmacy": [
-        wiki("Medicine Health.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),
-        wiki("Cough medicine.jpg"),
-        wiki("Robenacoxib blister package.jpg"),
-        wiki("Insulin syringe foto.jpg"),
     ],
     "blood_pressure": [
         wiki("Sphygmomanometer&Cuff.JPG"),
         wiki("2017 Sfigmomanometr elektroniczny.jpg"),
         wiki("2020 Sfigmomanometr elektroniczny.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),
     ],
     "syrup": [
         wiki("Cough medicine.jpg"),
@@ -125,19 +111,14 @@ IMAGE_POOL = {
         wiki("Dynatussin Syrup cough medicine4.jpg"),
         wiki("Sirop toux.jpg"),
     ],
+    "pharmacy": [
+        wiki("Medicine Health.jpg"),
+        wiki("Robenacoxib blister package.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Cough medicine.jpg"),
+        wiki("Insulin syringe foto.jpg"),
+    ],
 }
-
-# لیست سفید پشتیبان — فقط دارویی
-SAFE_FALLBACK = [
-    wiki("Metformin 500mg Tablets.jpg"),
-    wiki("Medicine Health.jpg"),
-    wiki("Insulin syringe foto.jpg"),
-    wiki("Cough medicine.jpg"),
-    wiki("Robenacoxib blister package.jpg"),
-    wiki("Dantrolene Ampoule.JPG"),
-    wiki("Baxa syringe.jpg"),
-    wiki("Sphygmomanometer&Cuff.JPG"),
-]
 
 SOFT_MUSIC_URLS = [
     "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=empty-mind-118973.mp3",
@@ -168,7 +149,8 @@ def generate_content_package(topic: str) -> dict:
   "hashtags": "۱۲ هشتگ فارسی و انگلیسی",
   "story_text": "متن کوتاه استوری حداکثر ۲ خط",
   "cover_hook": "یک جمله خیلی جذاب برای فریم اول (حداکثر ۱۲ کلمه)",
-  "image_category": "یکی از: insulin|metformin|injection|tablets|capsules|vitamin|antibiotic|pharmacy|blood_pressure|syrup",
+  "drug_name": "نام اصلی دارو به انگلیسی کوچک (مثل metformin, insulin, amoxicillin, omeprazole) یا فرم دارو",
+  "image_category": "دقیقا یکی از: metformin|insulin|injection|tablets|capsules|vitamin|antibiotic|blood_pressure|syrup|pharmacy",
   "slides": [
     {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه"}},
     {{"title": "عنوان ۲", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
@@ -177,6 +159,14 @@ def generate_content_package(topic: str) -> dict:
     {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم"}}
   ]
 }}
+قوانین image_category:
+- اگر موضوع متفورمین است فقط metformin
+- اگر انسولین است فقط insulin
+- اگر آمپول/تزریقی/لاغری تزریقی است injection
+- اگر شربت است syrup
+- اگر فشار خون است blood_pressure
+- اگر آنتی‌بیوتیک است antibiotic
+- اگر ویتامین/مکمل است vitamin
 فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
@@ -255,7 +245,8 @@ def download_image(url: str, path: str) -> bool:
                 return False
         digest = file_hash(path)
         if digest in USED_HASHES:
-            return False
+            # اجازه استفاده مجدد فقط با نام متفاوت مسیر خروجی (برای کمبود فایل)
+            pass
         USED_URLS.add(url)
         USED_HASHES.add(digest)
         return True
@@ -264,62 +255,56 @@ def download_image(url: str, path: str) -> bool:
         return False
 
 
-def detect_categories(text: str, preferred: str = "") -> list:
-    t = (text or "").lower()
-    cats = []
-    if preferred and preferred in IMAGE_POOL:
-        cats.append(preferred)
-    rules = [
+def resolve_category(topic: str, preferred: str = "", drug_name: str = "") -> str:
+    """یک دسته اصلی و دقیق برای کل ویدیو"""
+    t = f"{topic} {preferred} {drug_name}".lower()
+
+    # اولویت با نام دقیق دارو
+    exact = [
+        ("metformin", ["metformin", "متفورمین", "گلوکوفاژ"]),
         ("insulin", ["insulin", "انسولین"]),
-        ("metformin", ["metformin", "متفورمین"]),
-        ("injection", ["injection", "ampoule", "syringe", "آمپول", "تزریق", "سرنگ", "لاغری", "semaglutide", "glp"]),
-        ("vitamin", ["vitamin", "ویتامین", "امگا", "omega", "مکمل"]),
-        ("antibiotic", ["antibiotic", "آنتی"]),
-        ("blood_pressure", ["blood pressure", "فشار"]),
+        ("blood_pressure", ["blood pressure", "فشار خون", "فشارخون", "losartan", "amlodipine", "لوزارتان", "آملودیپین"]),
         ("syrup", ["syrup", "شربت", "سرماخورد"]),
-        ("capsules", ["capsule", "کپسول"]),
-        ("tablets", ["tablet", "قرص", "nsaid", "افسردگی", "ضدالتهاب"]),
-        ("pharmacy", ["pharmacy", "داروخانه", "کمبود"]),
+        ("antibiotic", ["antibiotic", "آنتی‌بیوتیک", "آنتی بیوتیک", "amoxicillin", "آموکسی"]),
+        ("vitamin", ["vitamin", "ویتامین", "امگا", "omega", "مکمل"]),
+        ("injection", ["آمپول", "تزریق", "سرنگ", "injection", "ampoule", "syringe", "لاغری", "semaglutide", "ozempic", "glp"]),
+        ("capsules", ["کپسول", "capsule"]),
+        ("tablets", ["قرص", "tablet", "nsaid", "ایبوپروفن", "استامینوفن"]),
+        ("pharmacy", ["داروخانه", "کمبود دارو", "pharmacy"]),
     ]
-    for cat, keys in rules:
-        if any(k in t for k in keys) and cat not in cats:
-            cats.append(cat)
-    if not cats:
-        cats = ["tablets", "pharmacy"]
-    return cats
+    for cat, keys in exact:
+        if any(k in t for k in keys):
+            return cat
+
+    if preferred in IMAGE_POOL:
+        return preferred
+    return "tablets"
 
 
-def fetch_related_background(query: str, path: str, slide_index: int, preferred_cat: str = "") -> bool:
-    """فقط از لیست سفید تصاویر دارویی — بدون جستجوی آزاد"""
-    context = f"{CURRENT_TOPIC} {query} {preferred_cat}"
-    cats = detect_categories(context, preferred_cat)
-    print(f"=== اسلاید {slide_index + 1} | دسته‌ها: {cats}")
+def fetch_related_background(path: str, slide_index: int) -> bool:
+    """فقط از دسته فعال همان دارو — بدون قاطی کردن دسته‌های دیگر"""
+    cat = ACTIVE_CATEGORY if ACTIVE_CATEGORY in IMAGE_POOL else "tablets"
+    pool = list(IMAGE_POOL.get(cat, IMAGE_POOL["tablets"]))
+    print(f"=== اسلاید {slide_index + 1} | فقط دسته: {cat} | تعداد فایل: {len(pool)}")
 
-    candidates = []
-    for cat in cats:
-        pool = list(IMAGE_POOL.get(cat, []))
-        if pool:
-            start = slide_index % len(pool)
-            pool = pool[start:] + pool[:start]
-        for u in pool:
-            if u not in USED_URLS:
-                candidates.append(u)
+    # چرخش برای تنوع بین اسلایدها داخل همان دارو
+    if pool:
+        start = slide_index % len(pool)
+        ordered = pool[start:] + pool[:start]
+    else:
+        ordered = []
 
-    # پشتیبان سفید
-    for u in SAFE_FALLBACK:
-        if u not in USED_URLS:
-            candidates.append(u)
-
-    seen, unique = set(), []
-    for u in candidates:
-        if u not in seen:
-            seen.add(u)
-            unique.append(u)
-
-    for url in unique:
+    for url in ordered:
+        # برای فایل تکراری در اسلایدهای مختلف، hash را محدود نکن اگر فقط یک عکس داریم
+        if url in USED_URLS and len(set(pool)) > 1:
+            continue
         print(f"تلاش: {url[:100]}")
+        # اجازه دانلود مجدد همان URL با بازنشانی موقت برای داروهایی با عکس کم
+        was_used = url in USED_URLS
+        if was_used:
+            USED_URLS.discard(url)
         if download_image(url, path):
-            print("✓ تصویر دارویی تأییدشده")
+            print(f"✓ تصویر مرتبط با {cat}")
             return True
 
     print("✗ دانلود ممکن نشد")
@@ -391,7 +376,12 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGB")
         bg = ImageOps.fit(bg, (WIDTH, HEIGHT), method=Image.Resampling.LANCZOS)
-        bg = ImageEnhance.Brightness(bg).enhance(0.65)
+        # کمی تنوع کادربندی برای یکسان نبودن اسلایدها وقتی عکس یکی است
+        if index % 2 == 0:
+            bg = ImageEnhance.Brightness(bg).enhance(0.62)
+        else:
+            bg = ImageEnhance.Brightness(bg).enhance(0.70)
+            bg = ImageOps.mirror(bg)
     else:
         solid_pharmacy_bg(out_path + ".bg.jpg")
         bg = Image.open(out_path + ".bg.jpg").convert("RGB")
@@ -517,14 +507,19 @@ def send_video(path: str, caption: str = ""):
 
 
 def main():
+    global ACTIVE_CATEGORY
     topic = get_topic()
     print("تولید محتوا...")
     package = generate_content_package(topic)
     slides = package.get("slides", [])[:5]
     if not slides:
         raise ValueError("اسلایدی تولید نشد")
+
     hook = package.get("cover_hook") or slides[0].get("title", "")
-    preferred_cat = (package.get("image_category") or "").strip()
+    preferred = (package.get("image_category") or "").strip()
+    drug_name = (package.get("drug_name") or "").strip()
+    ACTIVE_CATEGORY = resolve_category(topic, preferred, drug_name)
+    print(f"دسته تصویر نهایی برای این پست: {ACTIVE_CATEGORY} (drug={drug_name})")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -532,7 +527,7 @@ def main():
 
         for i, s in enumerate(slides):
             bg_file = str(tmp / f"bg_{i+1}.jpg")
-            ok = fetch_related_background(topic, bg_file, i, preferred_cat)
+            ok = fetch_related_background(bg_file, i)
             if not ok:
                 solid_pharmacy_bg(bg_file)
 
@@ -561,6 +556,7 @@ def main():
         full_text = f"""✅ بسته اینستاگرام / یوتیوب شورت
 
 📌 موضوع: {topic}
+🧪 دارو/دسته تصویر: {drug_name or ACTIVE_CATEGORY}
 
 ——— کپشن ———
 {package.get('caption', '')}
@@ -573,11 +569,11 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🖼️ فقط تصاویر سفید‌لیست دارویی (بدون سفال/لامپ)
+🖼️ تصاویر فقط مرتبط با همین دارو
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(video_path, caption="🎬 تصاویر تأییدشده دارویی")
+        send_video(video_path, caption=f"🎬 تصاویر مرتبط با: {drug_name or ACTIVE_CATEGORY}")
 
     print("✅ تمام")
 
