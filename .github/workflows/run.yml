@@ -26,7 +26,16 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra wget unzip
+
+      - name: Download Vazirmatn Persian font
+        run: |
+          mkdir -p fonts
+          wget -q -O vazir.zip "https://github.com/rastikerdar/vazirmatn/releases/download/v33.003/vazirmatn-v33.003.zip"
+          unzip -q vazir.zip -d vazir_tmp
+          find vazir_tmp -name "Vazirmatn-Regular.ttf" -exec cp {} fonts/ \;
+          find vazir_tmp -name "Vazirmatn-Bold.ttf" -exec cp {} fonts/ \;
+          ls -la fonts/
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
