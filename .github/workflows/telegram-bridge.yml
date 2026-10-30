@@ -1,0 +1,56 @@
+name: Telegram Bridge
+
+on:
+  schedule:
+    # هر ۵ دقیقه پیام‌های جدید بات را چک می‌کند
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra wget unzip
+
+      - name: Download Vazirmatn Persian font
+        run: |
+          mkdir -p fonts
+          wget -q -O vazir.zip "https://github.com/rastikerdar/vazirmatn/releases/download/v33.003/vazirmatn-v33.003.zip"
+          unzip -q vazir.zip -d vazir_tmp
+          find vazir_tmp -name "Vazirmatn-Regular.ttf" -exec cp {} fonts/ \;
+          find vazir_tmp -name "Vazirmatn-Bold.ttf" -exec cp {} fonts/ \;
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Telegram bridge
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_ADMIN_ID: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        run: python telegram_bridge.py
+
+      - name: Save Telegram offset state
+        run: |
+          if [ -f state/last_update_id.txt ]; then
+            git config user.name "pharma-agent-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add state/last_update_id.txt
+            git diff --staged --quiet || git commit -m "chore: update telegram offset"
+            git push
+          fi
