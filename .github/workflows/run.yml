@@ -1,26 +1,40 @@
 name: Run Pharma Agent
 
 on:
-  workflow_dispatch: # به شما اجازه می‌دهد هر زمان خواستید با یک کلیک دستی اسکریپت را اجرا کنید
+  schedule:
+    # هر روز ساعت ۲۲:۰۰ به وقت تهران = ۱۸:۳۰ UTC
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'موضوع دلخواه محتوا (اگر خالی باشد موضوع پرطرفدار روز انتخاب می‌شود)'
+        required: false
+        default: ''
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra
+
+      - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Run script
+      - name: Run Pharma Agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CUSTOM_TOPIC: ${{ github.event.inputs.topic }}
         run: python bot.py
