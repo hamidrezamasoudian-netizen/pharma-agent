@@ -46,7 +46,7 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/2.1 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/2.2 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
@@ -56,77 +56,88 @@ CURRENT_TOPIC = ""
 
 
 def wiki(name: str, width: int = 1280) -> str:
-    """لینک پایدار تصویر از ویکی‌مدیا"""
     return f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(name)}?width={width}"
 
 
-# فقط فایل‌هایی که Special:FilePath برایشان ۲۰۰ می‌دهد
+# فقط فایل‌های مشخص و تأییدشده دارویی (نه نام‌های کلی که ممکن است سفال/لامپ باشند)
 IMAGE_POOL = {
     "insulin": [
-        wiki("Syringe.jpg"),
-        wiki("Ampoule.jpg"),
-        wiki("Medicine_bottles.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Tablets.jpg"),
+        wiki("Insulin syringe foto.jpg"),
+        wiki("Insulin syringe in disassembled form.jpg"),
+        wiki("Baxa syringe.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Medicine Health.jpg"),
     ],
     "metformin": [
-        wiki("Metformin.jpg"),
-        wiki("Tablets.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Medicine_bottles.jpg"),
-        wiki("Capsules.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Medicine Health.jpg"),
+        wiki("Robenacoxib blister package.jpg"),
+        wiki("Anterone (cyproterone acetate) tablets in Australia, with three blister packs.jpg"),
     ],
     "injection": [
-        wiki("Syringe.jpg"),
-        wiki("Ampoule.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Medicine_bottles.jpg"),
+        wiki("Insulin syringe foto.jpg"),
+        wiki("Baxa syringe.jpg"),
+        wiki("Dantrolene Ampoule.JPG"),
+        wiki("Diazepam Ampulle ratiopharm 10 mg. 2 ml.JPG"),
+        wiki("Ampoule, iodine (AM 1999.114.3-1).jpg"),
     ],
     "tablets": [
-        wiki("Tablets.jpg"),
-        wiki("Metformin.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Capsules.jpg"),
-        wiki("Antibiotics.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Medicine Health.jpg"),
+        wiki("Robenacoxib blister package.jpg"),
+        wiki("Anterone (cyproterone acetate) tablets in Australia, with three blister packs.jpg"),
+        wiki("Zumenon (estradiol hemihydrate) tablets in Australia, with one opened blister pack and one unopened blister pack.jpg"),
     ],
     "capsules": [
-        wiki("Capsules.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Medicine_bottles.jpg"),
-        wiki("Tablets.jpg"),
+        wiki("Medicine Health.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Robenacoxib blister package.jpg"),
+        wiki("Cough medicine.jpg"),
     ],
     "vitamin": [
-        wiki("Capsules.jpg"),
-        wiki("Medicine_bottles.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Tablets.jpg"),
+        wiki("Medicine Health.jpg"),
+        wiki("Cough medicine.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Robenacoxib blister package.jpg"),
     ],
     "antibiotic": [
-        wiki("Antibiotics.jpg"),
-        wiki("Capsules.jpg"),
-        wiki("Tablets.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
+        wiki("Medicine Health.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Robenacoxib blister package.jpg"),
+        wiki("Cough medicine.jpg"),
     ],
     "pharmacy": [
-        wiki("Pharmacy.jpg"),
-        wiki("Medicine_bottles.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Tablets.jpg"),
-        wiki("Capsules.jpg"),
+        wiki("Medicine Health.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
+        wiki("Cough medicine.jpg"),
+        wiki("Robenacoxib blister package.jpg"),
+        wiki("Insulin syringe foto.jpg"),
     ],
     "blood_pressure": [
-        wiki("Blood_pressure_monitor.jpg"),
-        wiki("Sphygmomanometer.jpg"),
-        wiki("Tablets.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
+        wiki("Sphygmomanometer&Cuff.JPG"),
+        wiki("2017 Sfigmomanometr elektroniczny.jpg"),
+        wiki("2020 Sfigmomanometr elektroniczny.jpg"),
+        wiki("Metformin 500mg Tablets.jpg"),
     ],
     "syrup": [
-        wiki("Cough_medicine.jpg"),
-        wiki("Medicine_bottles.jpg"),
-        wiki("Pharmaceutical_drug.jpg"),
-        wiki("Pharmacy.jpg"),
+        wiki("Cough medicine.jpg"),
+        wiki("Cough mixture (17050264752).jpg"),
+        wiki("Dynatussin Syrup cough medicine4.jpg"),
+        wiki("Sirop toux.jpg"),
     ],
 }
+
+# لیست سفید پشتیبان — فقط دارویی
+SAFE_FALLBACK = [
+    wiki("Metformin 500mg Tablets.jpg"),
+    wiki("Medicine Health.jpg"),
+    wiki("Insulin syringe foto.jpg"),
+    wiki("Cough medicine.jpg"),
+    wiki("Robenacoxib blister package.jpg"),
+    wiki("Dantrolene Ampoule.JPG"),
+    wiki("Baxa syringe.jpg"),
+    wiki("Sphygmomanometer&Cuff.JPG"),
+]
 
 SOFT_MUSIC_URLS = [
     "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=empty-mind-118973.mp3",
@@ -231,7 +242,7 @@ def download_image(url: str, path: str) -> bool:
     try:
         r = requests.get(url, timeout=50, headers=HEADERS, allow_redirects=True)
         if r.status_code != 200 or len(r.content) < 3000:
-            print(f"ناموفق {r.status_code} len={len(getattr(r,'content',b''))} {url[:70]}")
+            print(f"ناموفق {r.status_code} {url[:80]}")
             return False
         ctype = r.headers.get("Content-Type", "").lower()
         if "html" in ctype or "json" in ctype:
@@ -274,14 +285,12 @@ def detect_categories(text: str, preferred: str = "") -> list:
         if any(k in t for k in keys) and cat not in cats:
             cats.append(cat)
     if not cats:
-        cats = ["pharmacy", "tablets", "capsules"]
-    for extra in ("pharmacy", "tablets", "injection"):
-        if extra not in cats:
-            cats.append(extra)
+        cats = ["tablets", "pharmacy"]
     return cats
 
 
 def fetch_related_background(query: str, path: str, slide_index: int, preferred_cat: str = "") -> bool:
+    """فقط از لیست سفید تصاویر دارویی — بدون جستجوی آزاد"""
     context = f"{CURRENT_TOPIC} {query} {preferred_cat}"
     cats = detect_categories(context, preferred_cat)
     print(f"=== اسلاید {slide_index + 1} | دسته‌ها: {cats}")
@@ -289,13 +298,17 @@ def fetch_related_background(query: str, path: str, slide_index: int, preferred_
     candidates = []
     for cat in cats:
         pool = list(IMAGE_POOL.get(cat, []))
-        # چرخش بر اساس ایندکس اسلاید تا هر فریم عکس متفاوت بگیرد
         if pool:
             start = slide_index % len(pool)
             pool = pool[start:] + pool[:start]
         for u in pool:
             if u not in USED_URLS:
                 candidates.append(u)
+
+    # پشتیبان سفید
+    for u in SAFE_FALLBACK:
+        if u not in USED_URLS:
+            candidates.append(u)
 
     seen, unique = set(), []
     for u in candidates:
@@ -304,21 +317,12 @@ def fetch_related_background(query: str, path: str, slide_index: int, preferred_
             unique.append(u)
 
     for url in unique:
-        print(f"تلاش: {url[:90]}")
+        print(f"تلاش: {url[:100]}")
         if download_image(url, path):
-            print("✓ تصویر واقعی دارو ذخیره شد")
+            print("✓ تصویر دارویی تأییدشده")
             return True
 
-    # هر تصویر باقی‌مانده از کل مخزن
-    rest = []
-    for pool in IMAGE_POOL.values():
-        rest.extend(pool)
-    for url in rest:
-        if download_image(url, path):
-            print("✓ تصویر از مخزن عمومی")
-            return True
-
-    print("✗ دانلود تصویر ممکن نشد")
+    print("✗ دانلود ممکن نشد")
     return False
 
 
@@ -569,11 +573,11 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🖼️ تصاویر واقعی ویکی‌مدیا (مرتبط با دارو)
+🖼️ فقط تصاویر سفید‌لیست دارویی (بدون سفال/لامپ)
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(video_path, caption="🎬 تصاویر واقعی مرتبط با دارو — نه کاغذدیواری")
+        send_video(video_path, caption="🎬 تصاویر تأییدشده دارویی")
 
     print("✅ تمام")
 
