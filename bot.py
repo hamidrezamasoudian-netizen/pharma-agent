@@ -5,6 +5,7 @@ import random
 import asyncio
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 import edge_tts
@@ -41,23 +42,21 @@ TRENDING_TOPICS = [
     "شربت‌های سرماخوردگی کودکان و هشدارهای مصرف",
 ]
 
-WIDTH, HEIGHT = 1080, 1920
+WIDTH, HEIGHT = 1080, 1920  # مناسب ریلز اینستاگرام و شورت یوتیوب
 MIN_SLIDE_DUR = 3.5
-MAX_SLIDE_DUR = 12.0
+MAX_SLIDE_DUR = 14.0
 
-BG_URLS = [
+# تصاویر عمومی دارویی (پشتیبان)
+FALLBACK_BG = [
     "https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=1080&h=1920&fit=crop",
     "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=1080&h=1920&fit=crop",
     "https://images.unsplash.com/photo-1631549916768-4119b2e5f926?w=1080&h=1920&fit=crop",
     "https://images.unsplash.com/photo-1585435557343-3b092031a831?w=1080&h=1920&fit=crop",
     "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=1080&h=1920&fit=crop",
-    "https://images.unsplash.com/photo-1576602976047-174e57a47881?w=1080&h=1920&fit=crop",
 ]
 
-# موزیک‌های خیلی ملایم و کم‌انرژی
 SOFT_MUSIC_URLS = [
     "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=empty-mind-118973.mp3",
-    "https://cdn.pixabay.com/download/audio/2022/08/02/audio_884fe92c21.mp3?filename=relaxing-14564.mp3",
     "https://cdn.pixabay.com/download/audio/2021/11/25/audio_9174bd675d.mp3?filename=soft-piano-ambient-114064.mp3",
 ]
 
@@ -73,23 +72,48 @@ def get_topic() -> str:
 
 def generate_content_package(topic: str) -> dict:
     prompt = f"""
-تو یک استراتژیست محتوای تخصصی داروسازی برای اینستاگرام در ایران هستی.
+تو استراتژیست محتوای تخصصی داروسازی برای اینستاگرام و یوتیوب‌شورت در ایران هستی.
 موضوع: «{topic}»
 
-خروجی را فقط به صورت JSON معتبر بده:
+فقط JSON معتبر برگردان:
 {{
   "caption": "کپشن کامل پست (۳ تا ۵ پاراگراف علمی و جذاب)",
   "hashtags": "۱۲ هشتگ فارسی و انگلیسی",
   "story_text": "متن کوتاه استوری حداکثر ۲ خط",
   "slides": [
-    {{"title": "عنوان کوتاه ۱", "body": "متن واضح حداکثر ۲۰ کلمه", "narration": "جمله گفتاری طبیعی برای همین اسلاید (۱ تا ۲ جمله کامل)"}},
-    {{"title": "عنوان ۲", "body": "متن واضح حداکثر ۲۰ کلمه", "narration": "جمله گفتاری طبیعی برای اسلاید ۲"}},
-    {{"title": "عنوان ۳", "body": "متن واضح حداکثر ۲۰ کلمه", "narration": "جمله گفتاری طبیعی برای اسلاید ۳"}},
-    {{"title": "عنوان ۴", "body": "متن واضح حداکثر ۲۰ کلمه", "narration": "جمله گفتاری طبیعی برای اسلاید ۴"}},
-    {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گفتاری گرم و دعوت به تعامل"}}
+    {{
+      "title": "عنوان کوتاه ۱",
+      "body": "متن واضح حداکثر ۱۸ کلمه",
+      "narration": "۱ تا ۲ جمله گفتاری طبیعی و روان برای همین اسلاید",
+      "image_query": "عبارت انگلیسی کوتاه برای جستجوی تصویر مرتبط (مثلا metformin tablets close up یا insulin pen injection)"
+    }},
+    {{
+      "title": "عنوان ۲",
+      "body": "متن واضح حداکثر ۱۸ کلمه",
+      "narration": "جمله گفتاری طبیعی",
+      "image_query": "english image search query"
+    }},
+    {{
+      "title": "عنوان ۳",
+      "body": "متن واضح حداکثر ۱۸ کلمه",
+      "narration": "جمله گفتاری طبیعی",
+      "image_query": "english image search query"
+    }},
+    {{
+      "title": "عنوان ۴",
+      "body": "متن واضح حداکثر ۱۸ کلمه",
+      "narration": "جمله گفتاری طبیعی",
+      "image_query": "english image search query"
+    }},
+    {{
+      "title": "جمع‌بندی",
+      "body": "نتیجه کوتاه",
+      "narration": "جمع‌بندی گرم و دعوت به تعامل",
+      "image_query": "pharmacy professional healthcare"
+    }}
   ]
 }}
-قوانین: فارسی روان، نریشن محاوره‌ای مودبانه و طبیعی، بدون توصیه درمانی قطعی، فقط JSON.
+قوانین: فارسی روان، نریشن محاوره‌ای مودبانه، بدون توصیه درمانی قطعی، image_query حتما انگلیسی و مرتبط با همان دارو/موضوع اسلاید، فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
     text = response.text.strip()
@@ -100,10 +124,8 @@ def generate_content_package(topic: str) -> dict:
 
 
 def fa(text: str) -> str:
-    """اتصال حروف فارسی بدون برعکس کردن کل متن"""
     if not text:
         return ""
-    # فقط reshape — get_display باعث برعکس شدن کامل می‌شد
     return arabic_reshaper.reshape(str(text))
 
 
@@ -143,8 +165,7 @@ def wrap_fa(text: str, font, max_width: int, draw) -> list:
     return lines or [str(text)]
 
 
-def download_background(index: int, path: str) -> bool:
-    url = BG_URLS[index % len(BG_URLS)]
+def download_image(url: str, path: str) -> bool:
     try:
         r = requests.get(url, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
         if r.status_code == 200 and len(r.content) > 5000:
@@ -152,7 +173,29 @@ def download_background(index: int, path: str) -> bool:
                 f.write(r.content)
             return True
     except Exception as e:
-        print(f"خطا پس‌زمینه: {e}")
+        print(f"دانلود تصویر خطا: {e}")
+    return False
+
+
+def fetch_related_background(query: str, path: str, fallback_index: int) -> bool:
+    """جستجوی تصویر مرتبط با دارو از Unsplash Source / LoremFlickr"""
+    q = (query or "pharmacy medicine").strip()
+    q_encoded = quote(q)
+    candidates = [
+        f"https://loremflickr.com/1080/1920/{q_encoded.replace('%20', ',')}",
+        f"https://source.unsplash.com/1080x1920/?{q_encoded}",
+        FALLBACK_BG[fallback_index % len(FALLBACK_BG)],
+    ]
+    for url in candidates:
+        print(f"تلاش پس‌زمینه: {url[:80]}...")
+        if download_image(url, path):
+            # اعتبارسنجی باز شدن با PIL
+            try:
+                Image.open(path).verify()
+                print(f"پس‌زمینه مرتبط ذخیره شد برای: {q}")
+                return True
+            except Exception:
+                continue
     return False
 
 
@@ -160,65 +203,67 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGB")
         bg = bg.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-        bg = ImageEnhance.Brightness(bg).enhance(0.5)
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=1.0))
+        bg = ImageEnhance.Brightness(bg).enhance(0.48)
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=0.8))
     else:
         bg = Image.new("RGB", (WIDTH, HEIGHT), (12, 28, 42))
 
     img = bg.copy()
 
-    # کارت متن پایین‌تر (حدود ۷۰٪ ارتفاع)
-    card_top = int(HEIGHT * 0.70)
+    # کارت متن خیلی پایین‌تر (~۷۸٪)
+    card_top = int(HEIGHT * 0.78)
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     odraw = ImageDraw.Draw(overlay)
-    odraw.rectangle([0, card_top, WIDTH, HEIGHT], fill=(8, 20, 32, 220))
+    odraw.rectangle([0, card_top, WIDTH, HEIGHT], fill=(6, 16, 28, 230))
     odraw.rectangle([0, card_top, WIDTH, card_top + 6], fill=(0, 180, 160, 255))
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)
 
-    title_font = load_font(50, bold=True)
-    body_font = load_font(40)
-    footer_font = load_font(26)
+    # فونت درشت‌تر
+    title_font = load_font(58, bold=True)
+    body_font = load_font(46)
+    footer_font = load_font(28)
 
-    margin = 64
+    margin = 56
     max_w = WIDTH - 2 * margin
-    y = card_top + 28
+    y = card_top + 22
 
     badge = fa(f"{index} / {total}")
-    draw.text((margin, card_top + 12), badge, font=footer_font, fill=(0, 200, 180))
+    draw.text((margin, card_top + 10), badge, font=footer_font, fill=(0, 200, 180))
 
     for line in wrap_fa(title, title_font, max_w, draw):
         line_fa = fa(line)
         bbox = draw.textbbox((0, 0), line_fa, font=title_font)
         w = bbox[2] - bbox[0]
         draw.text(((WIDTH - w) // 2, y), line_fa, font=title_font, fill=(255, 255, 255))
-        y += 62
+        y += 68
 
-    y += 8
+    y += 4
     for line in wrap_fa(body, body_font, max_w, draw):
         line_fa = fa(line)
         bbox = draw.textbbox((0, 0), line_fa, font=body_font)
         w = bbox[2] - bbox[0]
-        draw.text(((WIDTH - w) // 2, y), line_fa, font=body_font, fill=(220, 230, 240))
-        y += 52
+        draw.text(((WIDTH - w) // 2, y), line_fa, font=body_font, fill=(225, 235, 245))
+        y += 56
 
     footer = fa("داروخانه دکتر مسعودیان  |  @drhrmasoudian")
     bbox = draw.textbbox((0, 0), footer, font=footer_font)
     w = bbox[2] - bbox[0]
-    draw.text(((WIDTH - w) // 2, HEIGHT - 56), footer, font=footer_font, fill=(140, 180, 190))
+    draw.text(((WIDTH - w) // 2, HEIGHT - 48), footer, font=footer_font, fill=(140, 180, 190))
 
     img.save(out_path, quality=95)
     print(f"اسلاید {index} ساخته شد")
 
 
 async def make_narration_file(text: str, out_path: str):
-    """نریشن طبیعی‌تر و کمی آرام‌تر"""
-    voice = "fa-IR-DilaraNeural"
+    """نریشن مردانه، ملایم و روان‌تر"""
+    # صدای مردانه فارسی
+    voice = "fa-IR-FaridNeural"
     communicate = edge_tts.Communicate(
         text.strip(),
         voice=voice,
-        rate="-12%",
-        pitch="-2Hz",
+        rate="-15%",   # آرام‌تر و طبیعی‌تر
+        pitch="-4Hz",  # کمی بم‌تر و ملایم
     )
     await communicate.save(out_path)
 
@@ -230,7 +275,6 @@ def download_soft_music(path: str) -> bool:
             if r.status_code == 200 and len(r.content) > 8000:
                 with open(path, "wb") as f:
                     f.write(r.content)
-                print("موزیک ملایم دانلود شد")
                 return True
         except Exception:
             continue
@@ -238,7 +282,6 @@ def download_soft_music(path: str) -> bool:
 
 
 def build_video(slide_paths, narration_paths, music_path, output_path):
-    """هر اسلاید به اندازه نریشن همان اسلاید طول می‌کشد"""
     clips = []
     for i, img_path in enumerate(slide_paths):
         dur = MIN_SLIDE_DUR
@@ -246,15 +289,14 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
         if nar_path and os.path.exists(nar_path):
             try:
                 a = AudioFileClip(nar_path)
-                dur = min(MAX_SLIDE_DUR, max(MIN_SLIDE_DUR, a.duration + 0.6))
+                dur = min(MAX_SLIDE_DUR, max(MIN_SLIDE_DUR, a.duration + 0.7))
                 a.close()
             except Exception:
                 pass
-        clip = ImageClip(img_path).set_duration(dur).fadein(0.3).fadeout(0.3)
-        # صدای نریشن این اسلاید
+        clip = ImageClip(img_path).set_duration(dur).fadein(0.25).fadeout(0.25)
         if nar_path and os.path.exists(nar_path):
             try:
-                nar = AudioFileClip(nar_path).volumex(1.05)
+                nar = AudioFileClip(nar_path).volumex(1.08)
                 clip = clip.set_audio(nar)
             except Exception as e:
                 print(f"نریشن اسلاید {i+1}: {e}")
@@ -262,7 +304,6 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
 
     video = concatenate_videoclips(clips, method="compose")
 
-    # موزیک زمینه خیلی آرام
     if music_path and os.path.exists(music_path):
         try:
             bgm = AudioFileClip(music_path)
@@ -270,7 +311,7 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
                 bgm = afx.audio_loop(bgm, duration=video.duration)
             else:
                 bgm = bgm.subclip(0, video.duration)
-            bgm = bgm.volumex(0.06)  # ولوم خیلی کم
+            bgm = bgm.volumex(0.05)
             if video.audio is not None:
                 video = video.set_audio(CompositeAudioClip([video.audio, bgm]))
             else:
@@ -288,7 +329,7 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
         logger=None,
     )
     video.close()
-    print("ویدیو نهایی ساخته شد")
+    print("ویدیو نهایی ساخته شد (مناسب ریلز و یوتیوب شورت)")
 
 
 def send_message(text: str):
@@ -349,7 +390,9 @@ def main():
 
         for i, s in enumerate(slides, 1):
             bg_file = str(tmp / f"bg_{i}.jpg")
-            download_background(i - 1, bg_file)
+            query = s.get("image_query") or topic
+            fetch_related_background(query, bg_file, i - 1)
+
             out = str(tmp / f"slide_{i}.jpg")
             create_slide_image(
                 title=s.get("title", f"اسلاید {i}"),
@@ -361,13 +404,12 @@ def main():
             )
             slide_paths.append(out)
 
-            # نریشن جدا برای هر اسلاید
             nar_text = s.get("narration") or f"{s.get('title', '')}. {s.get('body', '')}"
             nar_file = str(tmp / f"nar_{i}.mp3")
             try:
                 asyncio.run(make_narration_file(nar_text, nar_file))
                 narration_paths.append(nar_file)
-                print(f"نریشن اسلاید {i} آماده")
+                print(f"نریشن مردانه اسلاید {i} آماده")
             except Exception as e:
                 print(f"نریشن اسلاید {i} خطا: {e}")
                 narration_paths.append("")
@@ -375,7 +417,7 @@ def main():
         music_path = str(tmp / "bgm.mp3")
         has_music = download_soft_music(music_path)
 
-        video_path = str(tmp / "instagram_reel.mp4")
+        video_path = str(tmp / "short_video.mp4")
         build_video(
             slide_paths,
             narration_paths,
@@ -387,7 +429,7 @@ def main():
             (s.get("narration") or f"{s.get('title', '')}. {s.get('body', '')}")
             for s in slides
         )
-        full_text = f"""✅ بسته اینستاگرام (نسخه اصلاح‌شده)
+        full_text = f"""✅ بسته اینستاگرام / یوتیوب شورت
 
 📌 موضوع: {topic}
 
@@ -399,14 +441,17 @@ def main():
 ——— استوری ———
 {package.get('story_text', '')}
 
-——— نریشن کامل ———
+——— نریشن ———
 {full_nar}
 
-🎬 ویدیو با نریشن هماهنگ + آلبوم اسلایدها ارسال شد.
+🎬 ویدیو عمودی 1080x1920 (مناسب ریلز و یوتیوب شورت) ارسال شد.
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(video_path, caption="🎬 ریلز اصلاح‌شده: فونت + نریشن هماهنگ + موزیک ملایم")
+        send_video(
+            video_path,
+            caption="🎬 آماده انتشار در اینستاگرام ریلز و یوتیوب شورت",
+        )
 
     print("✅ تمام")
 
