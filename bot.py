@@ -11,7 +11,7 @@ import requests
 import edge_tts
 import arabic_reshaper
 from google import genai
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageOps
 from moviepy.editor import (
     ImageClip,
     AudioFileClip,
@@ -44,10 +44,82 @@ TRENDING_TOPICS = [
 WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
-HEADERS = {"User-Agent": "PharmaAgent/1.0 (educational; github actions)"}
+HEADERS = {
+    "User-Agent": "PharmaAgent/2.0 (educational bot; +https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+}
 
 USED_URLS = set()
 USED_HASHES = set()
+CURRENT_TOPIC = ""
+
+# مخزن تصاویر واقعی دارویی (Wikimedia Upload) — پایدار روی GitHub Actions
+IMAGE_POOL = {
+    "insulin": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Insulin_aspart_sanofi_soloStar.jpg/1024px-Insulin_aspart_sanofi_soloStar.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Insulin_vial_and_syringe.jpg/1024px-Insulin_vial_and_syringe.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Lantus_SoloStar_insulin_pen.jpg/800px-Lantus_SoloStar_insulin_pen.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Insulin_cartridge.jpg/800px-Insulin_cartridge.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Insulin_injection.jpg/1024px-Insulin_injection.jpg",
+    ],
+    "metformin": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Metformin_500_mg_tablets.jpg/1024px-Metformin_500_mg_tablets.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Metformin_Hydrochloride_500mg_Tablets.jpg/1024px-Metformin_Hydrochloride_500mg_Tablets.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Glucophage_tablets.jpg/1024px-Glucophage_tablets.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Metformin.jpg/1024px-Metformin.jpg",
+    ],
+    "injection": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Syringe.jpg/1024px-Syringe.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Ampoule.jpg/800px-Ampoule.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Glass_ampoules.jpg/1024px-Glass_ampoules.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Injection_syringe.jpg/1024px-Injection_syringe.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/Medical_syringe.jpg/1024px-Medical_syringe.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Disposable_syringe.jpg/1024px-Disposable_syringe.jpg",
+    ],
+    "tablets": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/White_pills.jpg/1024px-White_pills.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Tablets_blister_pack.jpg/1024px-Tablets_blister_pack.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Medication_pills.jpg/1024px-Medication_pills.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Round_white_tablets.jpg/1024px-Round_white_tablets.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Assorted_pills.jpg/1024px-Assorted_pills.jpg",
+    ],
+    "capsules": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Capsules.jpg/1024px-Capsules.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Gel_capsules.jpg/1024px-Gel_capsules.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Fish_oil_capsules.jpg/1024px-Fish_oil_capsules.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Medication_capsules.jpg/1024px-Medication_capsules.jpg",
+    ],
+    "vitamin": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Vitamin_D_capsules.jpg/1024px-Vitamin_D_capsules.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Vitamin_bottles.jpg/1024px-Vitamin_bottles.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Dietary_supplements.jpg/1024px-Dietary_supplements.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Fish_oil_capsules.jpg/1024px-Fish_oil_capsules.jpg",
+    ],
+    "antibiotic": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Amoxicillin_capsules.jpg/1024px-Amoxicillin_capsules.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Antibiotics.jpg/1024px-Antibiotics.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Antibiotic_pills.jpg/1024px-Antibiotic_pills.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Tablets_blister_pack.jpg/1024px-Tablets_blister_pack.jpg",
+    ],
+    "pharmacy": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Pharmacy.jpg/1280px-Pharmacy.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Pharmacy_shelves.jpg/1280px-Pharmacy_shelves.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2d/Drugstore_interior.jpg/1280px-Drugstore_interior.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Medicine_bottles.jpg/1024px-Medicine_bottles.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Pharmaceutical_drugs.jpg/1280px-Pharmaceutical_drugs.jpg",
+    ],
+    "blood_pressure": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Sphygmomanometer.jpg/1024px-Sphygmomanometer.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Blood_pressure_monitor.jpg/1024px-Blood_pressure_monitor.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Pills_and_tablets.jpg/1280px-Pills_and_tablets.jpg",
+    ],
+    "syrup": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Cough_syrup.jpg/800px-Cough_syrup.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Medicine_bottles.jpg/1024px-Medicine_bottles.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Liquid_medication.jpg/800px-Liquid_medication.jpg",
+    ],
+}
 
 SOFT_MUSIC_URLS = [
     "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=empty-mind-118973.mp3",
@@ -56,11 +128,14 @@ SOFT_MUSIC_URLS = [
 
 
 def get_topic() -> str:
+    global CURRENT_TOPIC
     if CUSTOM_TOPIC:
         print(f"موضوع دستی: {CUSTOM_TOPIC}")
+        CURRENT_TOPIC = CUSTOM_TOPIC
         return CUSTOM_TOPIC
     topic = random.choice(TRENDING_TOPICS)
     print(f"موضوع روز: {topic}")
+    CURRENT_TOPIC = topic
     return topic
 
 
@@ -75,15 +150,16 @@ def generate_content_package(topic: str) -> dict:
   "hashtags": "۱۲ هشتگ فارسی و انگلیسی",
   "story_text": "متن کوتاه استوری حداکثر ۲ خط",
   "cover_hook": "یک جمله خیلی جذاب برای فریم اول (حداکثر ۱۲ کلمه)",
+  "image_category": "یکی از این‌ها: insulin|metformin|injection|tablets|capsules|vitamin|antibiotic|pharmacy|blood_pressure|syrup",
   "slides": [
-    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه", "image_query": "کوئری انگلیسی خیلی خاص برای تصویر کاور (نام دارو + شکل)"}},
-    {{"title": "عنوان ۲", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی", "image_query": "کوئری انگلیسی متفاوت اسلاید ۲"}},
-    {{"title": "عنوان ۳", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی", "image_query": "کوئری انگلیسی متفاوت اسلاید ۳"}},
-    {{"title": "عنوان ۴", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی", "image_query": "کوئری انگلیسی متفاوت اسلاید ۴"}},
-    {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم", "image_query": "کوئری انگلیسی متفاوت اسلاید ۵"}}
+    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه"}},
+    {{"title": "عنوان ۲", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
+    {{"title": "عنوان ۳", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
+    {{"title": "عنوان ۴", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
+    {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم"}}
   ]
 }}
-هر image_query باید متفاوت باشد. نام دارو + شکل (tablets/capsules/ampoule/pen). فقط JSON.
+image_category را دقیق و مرتبط با موضوع انتخاب کن. فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
     text = response.text.strip()
@@ -143,36 +219,82 @@ def file_hash(path: str) -> str:
 
 
 def download_image(url: str, path: str) -> bool:
-    if url in USED_URLS:
+    if not url or url in USED_URLS:
         return False
     try:
-        r = requests.get(url, timeout=45, headers=HEADERS, allow_redirects=True)
-        if r.status_code == 200 and len(r.content) > 5000:
-            if "html" in r.headers.get("Content-Type", "").lower():
-                return False
-            with open(path, "wb") as f:
-                f.write(r.content)
-            try:
-                Image.open(path).verify()
-                digest = file_hash(path)
-                if digest in USED_HASHES:
+        r = requests.get(url, timeout=50, headers=HEADERS, allow_redirects=True)
+        if r.status_code != 200 or len(r.content) < 3000:
+            print(f"دانلود ناموفق {r.status_code} size={len(r.content)} url={url[:70]}")
+            return False
+        ctype = r.headers.get("Content-Type", "").lower()
+        if "html" in ctype or "json" in ctype:
+            return False
+        with open(path, "wb") as f:
+            f.write(r.content)
+        try:
+            with Image.open(path) as im:
+                im.load()
+                if im.size[0] < 200 or im.size[1] < 200:
                     return False
-                USED_URLS.add(url)
-                USED_HASHES.add(digest)
-                return True
-            except Exception:
+            digest = file_hash(path)
+            if digest in USED_HASHES:
                 return False
+            USED_URLS.add(url)
+            USED_HASHES.add(digest)
+            return True
+        except Exception as e:
+            print(f"تصویر نامعتبر: {e}")
+            return False
     except Exception as e:
         print(f"دانلود خطا: {e}")
     return False
 
 
+def detect_categories(text: str, preferred: str = "") -> list:
+    """تشخیص دسته‌های تصویر از روی موضوع فارسی/انگلیسی"""
+    t = (text or "").lower()
+    cats = []
+    if preferred and preferred in IMAGE_POOL:
+        cats.append(preferred)
+
+    rules = [
+        ("insulin", ["insulin", "انسولین", "قلم انسولین"]),
+        ("metformin", ["metformin", "متفورمین", "گلوکوفاژ"]),
+        ("injection", ["injection", "ampoule", "syringe", "آمپول", "تزریق", "سرنگ", "لاغری", "ozempic", "semaglutide", "glp-1", "glp1"]),
+        ("vitamin", ["vitamin", "ویتامین", "امگا", "omega", "مکمل"]),
+        ("antibiotic", ["antibiotic", "آنتی‌بیوتیک", "آنتی بیوتیک", "آموکسی"]),
+        ("blood_pressure", ["blood pressure", "فشار خون", "فشارخون"]),
+        ("syrup", ["syrup", "شربت", "سرماخوردگی"]),
+        ("capsules", ["capsule", "کپسول"]),
+        ("tablets", ["tablet", "قرص", "ضدالتهاب", "nsaid", "افسردگی"]),
+        ("pharmacy", ["pharmacy", "داروخانه", "کمبود دارو"]),
+    ]
+    for cat, keys in rules:
+        if any(k in t for k in keys):
+            if cat not in cats:
+                cats.append(cat)
+
+    if not cats:
+        cats = ["tablets", "pharmacy", "capsules"]
+    # همیشه چند تصویر عمومی دارویی هم در انتها باشد
+    for extra in ("tablets", "pharmacy", "injection"):
+        if extra not in cats:
+            cats.append(extra)
+    return cats
+
+
 def search_wikimedia(query: str, limit: int = 8) -> list:
     try:
         params = {
-            "action": "query", "format": "json", "generator": "search",
-            "gsrnamespace": 6, "gsrsearch": query, "gsrlimit": limit,
-            "prop": "imageinfo", "iiprop": "url|mime|size", "iiurlwidth": 1280,
+            "action": "query",
+            "format": "json",
+            "generator": "search",
+            "gsrnamespace": 6,
+            "gsrsearch": f"{query} filetype:bitmap",
+            "gsrlimit": limit,
+            "prop": "imageinfo",
+            "iiprop": "url|mime|size",
+            "iiurlwidth": 1280,
         }
         r = requests.get("https://commons.wikimedia.org/w/api.php", params=params, headers=HEADERS, timeout=30)
         pages = r.json().get("query", {}).get("pages", {})
@@ -185,103 +307,98 @@ def search_wikimedia(query: str, limit: int = 8) -> list:
             if url and url not in USED_URLS:
                 urls.append(url)
         random.shuffle(urls)
-        print(f"wikimedia({query}): {len(urls)}")
         return urls
     except Exception as e:
-        print(f"wikimedia error: {e}")
+        print(f"wikimedia: {e}")
         return []
 
 
-def search_openverse(query: str, limit: int = 8) -> list:
-    try:
-        params = {
-            "q": query, "page_size": limit, "page": random.randint(1, 3),
-            "license": "cc0,pdm,by,by-sa",
-        }
-        r = requests.get("https://api.openverse.org/v1/images/", params=params, headers=HEADERS, timeout=30)
-        if r.status_code != 200:
-            return []
-        urls = [i.get("url") for i in r.json().get("results", []) if i.get("url") and i.get("url") not in USED_URLS]
-        random.shuffle(urls)
-        print(f"openverse({query}): {len(urls)}")
-        return urls
-    except Exception as e:
-        print(f"openverse error: {e}")
-        return []
+def fetch_related_background(query: str, path: str, slide_index: int, preferred_cat: str = "") -> bool:
+    """اول مخزن تصاویر واقعی دارو، بعد ویکی‌مدیا — بدون کاغذدیواری"""
+    context = f"{CURRENT_TOPIC} {query} {preferred_cat}"
+    cats = detect_categories(context, preferred_cat)
+    print(f"=== اسلاید {slide_index + 1} | دسته‌ها: {cats} | query={query}")
+
+    candidates = []
+    for cat in cats:
+        pool = list(IMAGE_POOL.get(cat, []))
+        random.shuffle(pool)
+        for u in pool:
+            if u not in USED_URLS:
+                candidates.append(u)
+
+    # جستجوی ویکی‌مدیا مکمل
+    for term in [query, cats[0] if cats else "medicine", "pharmaceutical drug"]:
+        if term:
+            candidates.extend(search_wikimedia(str(term), limit=5))
+
+    # یکتاسازی
+    seen, unique = set(), []
+    for u in candidates:
+        if u and u not in seen:
+            seen.add(u)
+            unique.append(u)
+
+    for url in unique:
+        print(f"تلاش تصویر: {url[:85]}")
+        if download_image(url, path):
+            print("✓ تصویر واقعی دارویی ذخیره شد")
+            return True
+
+    # آخرین تلاش: هر تصویر استفاده‌نشده از کل مخزن
+    all_urls = []
+    for pool in IMAGE_POOL.values():
+        all_urls.extend(pool)
+    random.shuffle(all_urls)
+    for url in all_urls:
+        if download_image(url, path):
+            print("✓ تصویر از مخزن عمومی دارو")
+            return True
+
+    print("✗ هیچ تصویری دانلود نشد")
+    return False
 
 
-def make_gradient_fallback(path: str, seed: int = 0):
-    random.seed(seed)
-    pairs = [((0, 110, 120), (12, 28, 48)), ((30, 70, 110), (8, 22, 40)), ((70, 50, 90), (20, 18, 40))]
-    c1, c2 = pairs[seed % len(pairs)]
-    img = Image.new("RGB", (WIDTH, HEIGHT), c1)
+def solid_pharmacy_bg(path: str, seed: int = 0):
+    """فقط اگر واقعاً دانلود ممکن نبود — پس‌زمینه ساده سبز دارویی نه کاغذدیواری"""
+    img = Image.new("RGB", (WIDTH, HEIGHT), (0, 90, 90))
     draw = ImageDraw.Draw(img)
     for y in range(HEIGHT):
         t = y / HEIGHT
-        col = tuple(int(c1[i] * (1 - t) + c2[i] * t) for i in range(3))
+        col = (int(0 * (1 - t) + 15 * t), int(90 * (1 - t) + 35 * t), int(90 * (1 - t) + 50 * t))
         draw.line([(0, y), (WIDTH, y)], fill=col)
-    for _ in range(14):
-        x, y = random.randint(0, WIDTH), random.randint(0, int(HEIGHT * 0.65))
-        rr = random.randint(40, 100)
-        draw.ellipse([x, y, x + rr, y + int(rr * 1.6)], outline=(255, 255, 255), width=2)
     img.save(path, quality=90)
-
-
-def fetch_related_background(query: str, path: str, slide_index: int) -> bool:
-    q = (query or "medicine tablets").strip()
-    print(f"=== تصویر اسلاید {slide_index + 1}: {q}")
-    variants = [q, f"{q} close up", f"{q} pharmacy", f"{q} package", f"{q} bottle"]
-    variants = variants[slide_index % len(variants):] + variants[: slide_index % len(variants)]
-    candidates = []
-    for term in variants:
-        candidates.extend(search_wikimedia(term, limit=6))
-        candidates.extend(search_openverse(term, limit=5))
-        if len(candidates) >= 15:
-            break
-    seen, unique = set(), []
-    for u in candidates:
-        if u and u not in seen and u not in USED_URLS:
-            seen.add(u)
-            unique.append(u)
-    for url in unique:
-        print(f"تلاش: {url[:90]}")
-        if download_image(url, path):
-            print("✓ تصویر یکتا")
-            return True
-    print("گرادیان جایگزین")
-    make_gradient_fallback(path, seed=slide_index + abs(hash(q)) % 50)
-    return True
 
 
 def create_cover_slide(title: str, body: str, hook: str, out_path: str, bg_path: str = None):
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGB")
         bg = ImageOps.fit(bg, (WIDTH, HEIGHT), method=Image.Resampling.LANCZOS)
-        bg = ImageEnhance.Brightness(bg).enhance(0.68)
-        bg = ImageEnhance.Contrast(bg).enhance(1.2)
+        bg = ImageEnhance.Brightness(bg).enhance(0.72)
+        bg = ImageEnhance.Contrast(bg).enhance(1.15)
     else:
-        make_gradient_fallback(out_path + ".bg.jpg", seed=7)
+        solid_pharmacy_bg(out_path + ".bg.jpg", 1)
         bg = Image.open(out_path + ".bg.jpg").convert("RGB")
 
     img = bg.copy()
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    od.rectangle([0, 0, WIDTH, int(HEIGHT * 0.2)], fill=(0, 0, 0, 90))
-    od.rectangle([0, int(HEIGHT * 0.52), WIDTH, HEIGHT], fill=(0, 0, 0, 150))
+    od.rectangle([0, 0, WIDTH, int(HEIGHT * 0.18)], fill=(0, 0, 0, 80))
+    od.rectangle([0, int(HEIGHT * 0.55), WIDTH, HEIGHT], fill=(0, 0, 0, 140))
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)
 
-    title_font = load_font(72, bold=True)
-    body_font = load_font(44)
-    badge_font = load_font(32, bold=True)
+    title_font = load_font(70, bold=True)
+    body_font = load_font(42)
+    badge_font = load_font(30, bold=True)
     footer_font = load_font(28)
-    margin, max_w = 60, WIDTH - 120
+    max_w = WIDTH - 120
 
     badge = fa("داروخانه دکتر مسعودیان")
     bbox = draw.textbbox((0, 0), badge, font=badge_font)
     w = bbox[2] - bbox[0]
-    draw.rounded_rectangle([WIDTH // 2 - w // 2 - 24, 80, WIDTH // 2 + w // 2 + 24, 140], radius=20, fill=(0, 150, 136))
-    draw.text(((WIDTH - w) // 2, 92), badge, font=badge_font, fill=(255, 255, 255))
+    draw.rounded_rectangle([WIDTH // 2 - w // 2 - 24, 80, WIDTH // 2 + w // 2 + 24, 138], radius=18, fill=(0, 150, 136))
+    draw.text(((WIDTH - w) // 2, 90), badge, font=badge_font, fill=(255, 255, 255))
 
     y = int(HEIGHT * 0.58)
     for line in wrap_fa(hook or title, title_font, max_w, draw):
@@ -289,14 +406,13 @@ def create_cover_slide(title: str, body: str, hook: str, out_path: str, bg_path:
         bbox = draw.textbbox((0, 0), lf, font=title_font)
         w = bbox[2] - bbox[0]
         draw.text(((WIDTH - w) // 2, y), lf, font=title_font, fill=(255, 255, 255))
-        y += 82
-    y += 8
-    for line in wrap_fa(body or title, body_font, max_w, draw):
+        y += 78
+    for line in wrap_fa(body or "", body_font, max_w, draw):
         lf = fa(line)
         bbox = draw.textbbox((0, 0), lf, font=body_font)
         w = bbox[2] - bbox[0]
         draw.text(((WIDTH - w) // 2, y), lf, font=body_font, fill=(220, 235, 240))
-        y += 56
+        y += 54
 
     footer = fa("@drhrmasoudian")
     bbox = draw.textbbox((0, 0), footer, font=footer_font)
@@ -310,9 +426,9 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGB")
         bg = ImageOps.fit(bg, (WIDTH, HEIGHT), method=Image.Resampling.LANCZOS)
-        bg = ImageEnhance.Brightness(bg).enhance(0.58)
+        bg = ImageEnhance.Brightness(bg).enhance(0.62)
     else:
-        make_gradient_fallback(out_path + ".bg.jpg", seed=index)
+        solid_pharmacy_bg(out_path + ".bg.jpg", index)
         bg = Image.open(out_path + ".bg.jpg").convert("RGB")
 
     img = bg.copy()
@@ -324,26 +440,25 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)
 
-    title_font = load_font(58, bold=True)
-    body_font = load_font(46)
+    title_font = load_font(56, bold=True)
+    body_font = load_font(44)
     footer_font = load_font(28)
-    margin, max_w = 56, WIDTH - 112
+    max_w = WIDTH - 112
     y = card_top + 22
 
-    draw.text((margin, card_top + 10), fa(f"{index} / {total}"), font=footer_font, fill=(0, 200, 180))
+    draw.text((56, card_top + 10), fa(f"{index} / {total}"), font=footer_font, fill=(0, 200, 180))
     for line in wrap_fa(title, title_font, max_w, draw):
         lf = fa(line)
         bbox = draw.textbbox((0, 0), lf, font=title_font)
         w = bbox[2] - bbox[0]
         draw.text(((WIDTH - w) // 2, y), lf, font=title_font, fill=(255, 255, 255))
-        y += 68
-    y += 4
+        y += 66
     for line in wrap_fa(body, body_font, max_w, draw):
         lf = fa(line)
         bbox = draw.textbbox((0, 0), lf, font=body_font)
         w = bbox[2] - bbox[0]
         draw.text(((WIDTH - w) // 2, y), lf, font=body_font, fill=(225, 235, 245))
-        y += 56
+        y += 54
 
     footer = fa("داروخانه دکتر مسعودیان  |  @drhrmasoudian")
     bbox = draw.textbbox((0, 0), footer, font=footer_font)
@@ -383,10 +498,11 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
                 a.close()
             except Exception:
                 pass
+        clip = ImageClip(img_path).set_duration(dur)
         if i == 0:
-            clip = ImageClip(img_path).set_duration(dur).fadeout(0.25)
+            clip = clip.fadeout(0.25)
         else:
-            clip = ImageClip(img_path).set_duration(dur).fadein(0.25).fadeout(0.25)
+            clip = clip.fadein(0.25).fadeout(0.25)
         if nar_path and os.path.exists(nar_path):
             try:
                 clip = clip.set_audio(AudioFileClip(nar_path).volumex(1.08))
@@ -446,6 +562,7 @@ def main():
     if not slides:
         raise ValueError("اسلایدی تولید نشد")
     hook = package.get("cover_hook") or slides[0].get("title", "")
+    preferred_cat = (package.get("image_category") or "").strip()
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -453,7 +570,10 @@ def main():
 
         for i, s in enumerate(slides):
             bg_file = str(tmp / f"bg_{i+1}.jpg")
-            fetch_related_background(s.get("image_query") or topic, bg_file, i)
+            ok = fetch_related_background(topic, bg_file, i, preferred_cat)
+            if not ok:
+                solid_pharmacy_bg(bg_file, i)
+
             out = str(tmp / f"slide_{i+1}.jpg")
             if i == 0:
                 create_cover_slide(s.get("title", ""), s.get("body", ""), hook, out, bg_file)
@@ -491,11 +611,11 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🎬 کاور قوی + تصاویر یکتا
+🖼️ تصاویر از مخزن واقعی دارویی (نه کاغذدیواری)
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(video_path, caption="🎬 کاور جذاب + تصاویر غیرتکراری")
+        send_video(video_path, caption="🎬 تصاویر واقعی مرتبط با دارو")
 
     print("✅ تمام")
 
