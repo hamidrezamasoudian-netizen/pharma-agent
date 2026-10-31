@@ -47,7 +47,7 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/2.4 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/2.5 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
@@ -55,19 +55,30 @@ USED_URLS = set()
 USED_HASHES = set()
 CURRENT_TOPIC = ""
 ACTIVE_CATEGORY = "tablets"
-# مسیر تصاویر پس‌زمینه موفق برای پر کردن فریم‌های خالی
 SUCCESSFUL_BGS = []
 
-# تلفظ آوایی نام داروها برای TTS (کلمه → خوانش فارسی واضح)
+# تلفظ آوایی نام داروها — لاتین خام با صدای فارسی اغلب بد خوانده می‌شود
+# بنابراین معادل آوایی فارسی نزدیک به تلفظ علمی می‌گذاریم
 PRONUNCIATION_MAP = [
+    (r"منیزیوم", "مَگ‌نِ‌زیوم"),
+    (r"منیزیم", "مَگ‌نِ‌زیوم"),
+    (r"magnesium", "مَگ‌نِ‌زیوم"),
+    (r"مَگنزیوم", "مَگ‌نِ‌زیوم"),
+    (r"کلسیم", "کَل‌سیم"),
+    (r"calcium", "کَل‌سیم"),
+    (r"زینک", "زینک"),
+    (r"zinc", "زینک"),
+    (r"آهن", "آ‌هَن"),
+    (r"فولیک", "فولیک"),
     (r"متفورمین", "مت‌فور‌مین"),
     (r"مت فورمین", "مت‌فور‌مین"),
     (r"metformin", "مت‌فور‌مین"),
     (r"گلوکوفاژ", "گلوکو‌فاژ"),
-    (r"انسولین", "اِن‌سولین"),
-    (r"insulin", "اِن‌سولین"),
+    (r"انسولین", "اِن‌سو‌لین"),
+    (r"insulin", "اِن‌سو‌لین"),
     (r"ویتامین\s*D\b", "ویتامین دی"),
     (r"ویتامین\s*d\b", "ویتامین دی"),
+    (r"ویتامین\s*دی", "ویتامین دی"),
     (r"vitamin\s*d\b", "ویتامین دی"),
     (r"امگا\s*۳", "اُمگا سه"),
     (r"امگا\s*3", "اُمگا سه"),
@@ -104,9 +115,7 @@ def wiki(name: str, width: int = 1280) -> str:
 
 
 IMAGE_POOL = {
-    "metformin": [
-        wiki("Metformin 500mg Tablets.jpg"),
-    ],
+    "metformin": [wiki("Metformin 500mg Tablets.jpg")],
     "insulin": [
         wiki("Insulin syringe foto.jpg"),
         wiki("Insulin syringe in disassembled form.jpg"),
@@ -125,18 +134,9 @@ IMAGE_POOL = {
         wiki("Anterone (cyproterone acetate) tablets in Australia, with three blister packs.jpg"),
         wiki("Medicine Health.jpg"),
     ],
-    "capsules": [
-        wiki("Medicine Health.jpg"),
-        wiki("Robenacoxib blister package.jpg"),
-    ],
-    "vitamin": [
-        wiki("Medicine Health.jpg"),
-        wiki("Robenacoxib blister package.jpg"),
-    ],
-    "antibiotic": [
-        wiki("Robenacoxib blister package.jpg"),
-        wiki("Medicine Health.jpg"),
-    ],
+    "capsules": [wiki("Medicine Health.jpg"), wiki("Robenacoxib blister package.jpg")],
+    "vitamin": [wiki("Medicine Health.jpg"), wiki("Robenacoxib blister package.jpg")],
+    "antibiotic": [wiki("Robenacoxib blister package.jpg"), wiki("Medicine Health.jpg")],
     "blood_pressure": [
         wiki("Sphygmomanometer&Cuff.JPG"),
         wiki("2017 Sfigmomanometr elektroniczny.jpg"),
@@ -188,14 +188,14 @@ def generate_content_package(topic: str) -> dict:
   "drug_name": "نام اصلی دارو به انگلیسی کوچک",
   "image_category": "دقیقا یکی از: metformin|insulin|injection|tablets|capsules|vitamin|antibiotic|blood_pressure|syrup|pharmacy",
   "slides": [
-    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه با تلفظ واضح نام دارو به فارسی"}},
+    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه"}},
     {{"title": "عنوان ۲", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
     {{"title": "عنوان ۳", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
     {{"title": "عنوان ۴", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
     {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم"}}
   ]
 }}
-در narration نام داروها را با فاصله هجا بنویس اگر سخت‌تلفظ هستند (مثل مت فور مین).
+در narration برای نام‌های سخت مثل منیزیم بنویس «مگ‌نیزیوم»، متفورمین را «مت‌فور‌مین». از املای گمراه‌کننده مثل منیزیم alone پرهیز کن.
 فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
@@ -306,26 +306,22 @@ def fetch_related_background(path: str, slide_index: int) -> bool:
     cat = ACTIVE_CATEGORY if ACTIVE_CATEGORY in IMAGE_POOL else "tablets"
     pool = list(IMAGE_POOL.get(cat, IMAGE_POOL["tablets"]))
     print(f"=== اسلاید {slide_index + 1} | دسته: {cat}")
-
     if pool:
         start = slide_index % len(pool)
         ordered = pool[start:] + pool[:start]
     else:
         ordered = []
-
     for url in ordered:
         print(f"تلاش: {url[:100]}")
         if download_image(url, path):
             SUCCESSFUL_BGS.append(path)
             print(f"✓ تصویر مرتبط با {cat}")
             return True
-
     print("✗ دانلود نشد — تلاش برای پر کردن از تصاویر قبلی")
     return False
 
 
 def fill_background_from_success(path: str, slide_index: int) -> bool:
-    """اگر دانلود نشد، از تصاویر موفق قبلی کپی/آینه کن تا فریم خالی نماند"""
     if not SUCCESSFUL_BGS:
         return False
     src = SUCCESSFUL_BGS[slide_index % len(SUCCESSFUL_BGS)]
@@ -333,7 +329,6 @@ def fill_background_from_success(path: str, slide_index: int) -> bool:
         src = SUCCESSFUL_BGS[0]
     try:
         img = Image.open(src).convert("RGB")
-        # آینه‌کردن و کمی تغییر نور برای تنوع
         if slide_index % 2 == 1:
             img = ImageOps.mirror(img)
         if slide_index % 3 == 0:
@@ -342,7 +337,7 @@ def fill_background_from_success(path: str, slide_index: int) -> bool:
             img = ImageEnhance.Contrast(img).enhance(1.08)
         img.save(path, quality=92)
         SUCCESSFUL_BGS.append(path)
-        print(f"✓ فریم خالی با آینه/کپی تصویر قبلی پر شد")
+        print("✓ فریم خالی با آینه/کپی تصویر قبلی پر شد")
         return True
     except Exception as e:
         print(f"خطا در پر کردن فریم: {e}")
@@ -461,19 +456,28 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
 
 
 def phonetize_for_tts(text: str) -> str:
-    """جایگزینی نام داروها با تلفظ واضح‌تر برای edge-tts"""
+    """تبدیل نام داروها به تلفظ قابل‌فهم برای edge-tts فارسی.
+
+    صدای fa-IR-FaridNeural لاتین خام را اغلب بد می‌خواند؛
+    بنابراین معادل آوایی فارسی نزدیک به تلفظ علمی می‌گذاریم
+    (منیزیم → مَگ‌نِ‌زیوم نزدیک به magnesium).
+    """
     out = text or ""
     for pattern, replacement in PRONUNCIATION_MAP:
         out = re.sub(pattern, replacement, out, flags=re.IGNORECASE)
-    # فاصله‌گذاری ملایم بین اعداد و واحدها
     out = re.sub(r"(\d)\s*(میلی)", r"\1 \2", out)
+    def split_latin(m):
+        w = m.group(0)
+        if len(w) <= 3:
+            return w
+        return " ".join([w[i:i+3] for i in range(0, len(w), 3)])
+    out = re.sub(r"\b[A-Za-z]{4,}\b", split_latin, out)
     return out
 
 
 async def make_narration_file(text: str, out_path: str):
     spoken = phonetize_for_tts(text.strip())
     print(f"TTS: {spoken[:80]}...")
-    # کمی آرام‌تر برای وضوح نام داروها
     communicate = edge_tts.Communicate(
         spoken,
         voice="fa-IR-FaridNeural",
@@ -626,11 +630,11 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🖼️ فریم خالی با آینه تصاویر پر می‌شود | تلفظ نام داروها بهبود یافته
+🖼️ فریم‌ها پر می‌شوند | تلفظ آوایی نام داروها (منیزیم→مگ‌نیزیوم)
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(video_path, caption=f"🎬 {drug_name or ACTIVE_CATEGORY} | بدون فریم خالی")
+        send_video(video_path, caption=f"🎬 {drug_name or ACTIVE_CATEGORY}")
 
     print("✅ تمام")
 
