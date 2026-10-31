@@ -47,7 +47,7 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/2.5 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/2.6 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
@@ -57,13 +57,13 @@ CURRENT_TOPIC = ""
 ACTIVE_CATEGORY = "tablets"
 SUCCESSFUL_BGS = []
 
-# تلفظ آوایی نام داروها — لاتین خام با صدای فارسی اغلب بد خوانده می‌شود
-# بنابراین معادل آوایی فارسی نزدیک به تلفظ علمی می‌گذاریم
+# فقط برای صدا (TTS) — متن روی تصویر دست‌نخورده می‌ماند
 PRONUNCIATION_MAP = [
     (r"منیزیوم", "مَگ‌نِ‌زیوم"),
     (r"منیزیم", "مَگ‌نِ‌زیوم"),
     (r"magnesium", "مَگ‌نِ‌زیوم"),
     (r"مَگنزیوم", "مَگ‌نِ‌زیوم"),
+    (r"مگ‌نیزیوم", "مَگ‌نِ‌زیوم"),
     (r"کلسیم", "کَل‌سیم"),
     (r"calcium", "کَل‌سیم"),
     (r"زینک", "زینک"),
@@ -195,7 +195,10 @@ def generate_content_package(topic: str) -> dict:
     {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم"}}
   ]
 }}
-در narration برای نام‌های سخت مثل منیزیم بنویس «مگ‌نیزیوم»، متفورمین را «مت‌فور‌مین». از املای گمراه‌کننده مثل منیزیم alone پرهیز کن.
+قوانین املا (خیلی مهم):
+- title و body و caption و cover_hook و story_text فقط املای استاندارد فارسی: منیزیم، متفورمین، انسولین
+- هرگز در متن روی تصویر ننویس: مگ‌نیزیوم، مت‌فور‌مین، اِن‌سو‌لین
+- narration را هم با همان املای استاندارد بنویس؛ تلفظ صدا جداگانه اصلاح می‌شود
 فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
@@ -317,7 +320,7 @@ def fetch_related_background(path: str, slide_index: int) -> bool:
             SUCCESSFUL_BGS.append(path)
             print(f"✓ تصویر مرتبط با {cat}")
             return True
-    print("✗ دانلود نشد — تلاش برای پر کردن از تصاویر قبلی")
+    print("✗ دانلود نشد")
     return False
 
 
@@ -337,7 +340,7 @@ def fill_background_from_success(path: str, slide_index: int) -> bool:
             img = ImageEnhance.Contrast(img).enhance(1.08)
         img.save(path, quality=92)
         SUCCESSFUL_BGS.append(path)
-        print("✓ فریم خالی با آینه/کپی تصویر قبلی پر شد")
+        print("✓ فریم با کپی/آینه پر شد")
         return True
     except Exception as e:
         print(f"خطا در پر کردن فریم: {e}")
@@ -456,28 +459,17 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
 
 
 def phonetize_for_tts(text: str) -> str:
-    """تبدیل نام داروها به تلفظ قابل‌فهم برای edge-tts فارسی.
-
-    صدای fa-IR-FaridNeural لاتین خام را اغلب بد می‌خواند؛
-    بنابراین معادل آوایی فارسی نزدیک به تلفظ علمی می‌گذاریم
-    (منیزیم → مَگ‌نِ‌زیوم نزدیک به magnesium).
-    """
+    """فقط برای فایل صدا — متن زیرنویس را تغییر نمی‌دهد."""
     out = text or ""
     for pattern, replacement in PRONUNCIATION_MAP:
         out = re.sub(pattern, replacement, out, flags=re.IGNORECASE)
     out = re.sub(r"(\d)\s*(میلی)", r"\1 \2", out)
-    def split_latin(m):
-        w = m.group(0)
-        if len(w) <= 3:
-            return w
-        return " ".join([w[i:i+3] for i in range(0, len(w), 3)])
-    out = re.sub(r"\b[A-Za-z]{4,}\b", split_latin, out)
     return out
 
 
 async def make_narration_file(text: str, out_path: str):
     spoken = phonetize_for_tts(text.strip())
-    print(f"TTS: {spoken[:80]}...")
+    print(f"TTS audio only: {spoken[:80]}...")
     communicate = edge_tts.Communicate(
         spoken,
         voice="fa-IR-FaridNeural",
@@ -592,6 +584,7 @@ def main():
                 if not fill_background_from_success(bg_file, i):
                     solid_pharmacy_bg(bg_file)
 
+            # متن روی تصویر = املای استاندارد (بدون phonetize)
             out = str(tmp / f"slide_{i+1}.jpg")
             if i == 0:
                 create_cover_slide(s.get("title", ""), s.get("body", ""), hook, out, bg_file)
@@ -599,6 +592,7 @@ def main():
                 create_slide_image(s.get("title", f"اسلاید {i+1}"), s.get("body", ""), i + 1, len(slides), out, bg_file)
             slide_paths.append(out)
 
+            # فقط صدا phonetize می‌شود
             nar_text = s.get("narration") or f"{s.get('title', '')}. {s.get('body', '')}"
             nar_file = str(tmp / f"nar_{i+1}.mp3")
             try:
@@ -630,7 +624,7 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🖼️ فریم‌ها پر می‌شوند | تلفظ آوایی نام داروها (منیزیم→مگ‌نیزیوم)
+🖼️ زیرنویس: املای استاندارد | 🔊 صدا: تلفظ اصلاح‌شده
 """
         send_message(full_text)
         send_photos(slide_paths)
