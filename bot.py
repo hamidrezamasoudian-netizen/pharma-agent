@@ -48,13 +48,13 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/4.0 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/4.1 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
 CURRENT_TOPIC = ""
 ACTIVE_CATEGORY = "tablets"
-PRESENTER_PATH = None  # تصویر تمام‌صفحه خانم + دارو
+PRESENTER_PATH = None
 
 PRONUNCIATION_MAP = [
     (r"منیزیوم", "مَگ‌نِ‌زیوم"),
@@ -96,6 +96,28 @@ PROP_PROMPTS = {
     "tablet": "holding a white medicine tablet and a small blister pack of pills in her hands",
     "capsule": "holding a two-tone medicine capsule between her fingers",
     "syrup": "holding a small amber cough syrup bottle with a measuring spoon",
+}
+
+# تصاویر آماده رایگان (Pexels) — خانم داروساز / روپوش سفید
+STOCK_PRESENTER = {
+    "ampoule": [
+        "https://images.pexels.com/photos/4047074/pexels-photo-4047074.jpeg?auto=compress&cs=tinysrgb&w=1080",
+        "https://images.pexels.com/photos/3376799/pexels-photo-3376799.jpeg?auto=compress&cs=tinysrgb&w=1080",
+        "https://images.pexels.com/photos/5206949/pexels-photo-5206949.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    ],
+    "tablet": [
+        "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
+        "https://images.pexels.com/photos/5206949/pexels-photo-5206949.jpeg?auto=compress&cs=tinysrgb&w=1080",
+        "https://images.pexels.com/photos/5726794/pexels-photo-5726794.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    ],
+    "capsule": [
+        "https://images.pexels.com/photos/5726794/pexels-photo-5726794.jpeg?auto=compress&cs=tinysrgb&w=1080",
+        "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    ],
+    "syrup": [
+        "https://images.pexels.com/photos/5206949/pexels-photo-5206949.jpeg?auto=compress&cs=tinysrgb&w=1080",
+        "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    ],
 }
 
 SOFT_MUSIC_URLS = [
@@ -235,12 +257,41 @@ def build_presenter_prompt(category: str) -> str:
     )
 
 
+def download_stock_presenter(path: str, category: str) -> bool:
+    prop = prop_type_for_category(category)
+    urls = list(STOCK_PRESENTER.get(prop, STOCK_PRESENTER["tablet"]))
+    for extra in STOCK_PRESENTER.values():
+        for u in extra:
+            if u not in urls:
+                urls.append(u)
+    for url in urls:
+        try:
+            print(f"دانلود استوک: {url[:70]}...")
+            r = requests.get(url, timeout=45, headers=HEADERS, allow_redirects=True)
+            if r.status_code != 200 or len(r.content) < 8000:
+                continue
+            ctype = r.headers.get("Content-Type", "").lower()
+            if "html" in ctype:
+                continue
+            with open(path, "wb") as f:
+                f.write(r.content)
+            with Image.open(path) as im:
+                im.load()
+                if im.size[0] < 300 or im.size[1] < 300:
+                    continue
+            print("✓ تصویر آماده اینترنت دانلود شد")
+            return True
+        except Exception as e:
+            print(f"استوک خطا: {e}")
+            continue
+    print("✗ استوک هم موفق نشد")
+    return False
+
+
 def generate_presenter_image(path: str, category: str) -> bool:
-    """تصویر تمام‌صفحه خانم زیبا + دارو با Imagen / Gemini Image"""
     prompt = build_presenter_prompt(category)
     print("تولید تصویر مجری:", prompt[:120], "...")
 
-    # 1) Imagen
     try:
         resp = client.models.generate_images(
             model="imagen-4.0-fast-generate-001",
@@ -266,7 +317,6 @@ def generate_presenter_image(path: str, category: str) -> bool:
     except Exception as e:
         print(f"Imagen ناموفق: {e}")
 
-    # 2) Gemini image model
     try:
         resp = client.models.generate_content(
             model="gemini-2.5-flash-image",
@@ -285,8 +335,8 @@ def generate_presenter_image(path: str, category: str) -> bool:
     except Exception as e:
         print(f"Gemini Image ناموفق: {e}")
 
-    print("✗ تولید تصویر مجری ممکن نشد")
-    return False
+    print("✗ تولید AI ناموفق — تلاش برای تصاویر آماده اینترنت")
+    return download_stock_presenter(path, category)
 
 
 def solid_pharmacy_bg(path: str):
@@ -360,7 +410,6 @@ def create_cover_slide(title: str, body: str, hook: str, out_path: str):
 
 def create_slide_image(title: str, body: str, index: int, total: int, out_path: str):
     bg = load_presenter_bg()
-    # تنوع ملایم بین اسلایدها بدون عوض کردن موضوع تصویر
     if index % 2 == 0:
         bg = ImageEnhance.Brightness(bg).enhance(0.82)
     else:
@@ -562,7 +611,7 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🖼️ مجری تمام‌صفحه + دارو در دست | 🔊 Dilara
+🖼️ مجری تمام‌صفحه (AI یا استوک) | 🔊 Dilara
 """
         send_message(full_text)
         send_photos(slide_paths)
