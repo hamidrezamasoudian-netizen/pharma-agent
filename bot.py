@@ -4,6 +4,7 @@ import json
 import random
 import asyncio
 import hashlib
+import shutil
 import tempfile
 from pathlib import Path
 from urllib.parse import quote
@@ -46,7 +47,7 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/2.3 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/2.4 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
@@ -54,17 +55,57 @@ USED_URLS = set()
 USED_HASHES = set()
 CURRENT_TOPIC = ""
 ACTIVE_CATEGORY = "tablets"
+# مسیر تصاویر پس‌زمینه موفق برای پر کردن فریم‌های خالی
+SUCCESSFUL_BGS = []
+
+# تلفظ آوایی نام داروها برای TTS (کلمه → خوانش فارسی واضح)
+PRONUNCIATION_MAP = [
+    (r"متفورمین", "مت‌فور‌مین"),
+    (r"مت فورمین", "مت‌فور‌مین"),
+    (r"metformin", "مت‌فور‌مین"),
+    (r"گلوکوفاژ", "گلوکو‌فاژ"),
+    (r"انسولین", "اِن‌سولین"),
+    (r"insulin", "اِن‌سولین"),
+    (r"ویتامین\s*D\b", "ویتامین دی"),
+    (r"ویتامین\s*d\b", "ویتامین دی"),
+    (r"vitamin\s*d\b", "ویتامین دی"),
+    (r"امگا\s*۳", "اُمگا سه"),
+    (r"امگا\s*3", "اُمگا سه"),
+    (r"omega\s*3", "اُمگا سه"),
+    (r"آموکسی‌سیلین", "آموکسی‌سی‌لین"),
+    (r"آموکسی سیلین", "آموکسی‌سی‌لین"),
+    (r"amoxicillin", "آموکسی‌سی‌لین"),
+    (r"آنتی‌بیوتیک", "آنتی‌بیوتیک"),
+    (r"آنتی بیوتیک", "آنتی‌بیوتیک"),
+    (r"NSAID", "اِن‌سِید"),
+    (r"ایبوپروفن", "ایبو‌پروفن"),
+    (r"استامینوفن", "اِستامینوفن"),
+    (r"لوزارتان", "لوزار‌تان"),
+    (r"آملودیپین", "آملو‌دیپین"),
+    (r"آتورواستاتین", "آتو‌روا‌استاتین"),
+    (r"وارفارین", "وارفارین"),
+    (r"کلونازپام", "کلونا‌زپام"),
+    (r"اُزِمپیک", "اُزِمپیک"),
+    (r"Ozempic", "اُزِمپیک"),
+    (r"سماگلوتاید", "سِما‌گلو‌تاید"),
+    (r"semaglutide", "سِما‌گلو‌تاید"),
+    (r"لیراگلوتاید", "لیرا‌گلو‌تاید"),
+    (r"پرل", "پِرل"),
+    (r"۵۰\s*هزار", "پنجاه هزار"),
+    (r"50\s*هزار", "پنجاه هزار"),
+    (r"میلی‌گرم", "میلی‌گرم"),
+    (r"mg\b", "میلی‌گرم"),
+    (r"IU\b", "آی‌یو"),
+]
 
 
 def wiki(name: str, width: int = 1280) -> str:
     return f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(name)}?width={width}"
 
 
-# هر دسته فقط تصاویر همان دارو/شکل — بدون قاطی شدن با داروهای دیگر
 IMAGE_POOL = {
     "metformin": [
         wiki("Metformin 500mg Tablets.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),  # یک فایل اصلی؛ تنوع با برش متفاوت در اسلایدها
     ],
     "insulin": [
         wiki("Insulin syringe foto.jpg"),
@@ -82,23 +123,19 @@ IMAGE_POOL = {
         wiki("Metformin 500mg Tablets.jpg"),
         wiki("Robenacoxib blister package.jpg"),
         wiki("Anterone (cyproterone acetate) tablets in Australia, with three blister packs.jpg"),
-        wiki("Zumenon (estradiol hemihydrate) tablets in Australia, with one opened blister pack and one unopened blister pack.jpg"),
         wiki("Medicine Health.jpg"),
     ],
     "capsules": [
         wiki("Medicine Health.jpg"),
         wiki("Robenacoxib blister package.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),
     ],
     "vitamin": [
         wiki("Medicine Health.jpg"),
         wiki("Robenacoxib blister package.jpg"),
-        wiki("Cough medicine.jpg"),
     ],
     "antibiotic": [
         wiki("Robenacoxib blister package.jpg"),
         wiki("Medicine Health.jpg"),
-        wiki("Metformin 500mg Tablets.jpg"),
     ],
     "blood_pressure": [
         wiki("Sphygmomanometer&Cuff.JPG"),
@@ -115,7 +152,6 @@ IMAGE_POOL = {
         wiki("Medicine Health.jpg"),
         wiki("Robenacoxib blister package.jpg"),
         wiki("Metformin 500mg Tablets.jpg"),
-        wiki("Cough medicine.jpg"),
         wiki("Insulin syringe foto.jpg"),
     ],
 }
@@ -149,24 +185,17 @@ def generate_content_package(topic: str) -> dict:
   "hashtags": "۱۲ هشتگ فارسی و انگلیسی",
   "story_text": "متن کوتاه استوری حداکثر ۲ خط",
   "cover_hook": "یک جمله خیلی جذاب برای فریم اول (حداکثر ۱۲ کلمه)",
-  "drug_name": "نام اصلی دارو به انگلیسی کوچک (مثل metformin, insulin, amoxicillin, omeprazole) یا فرم دارو",
+  "drug_name": "نام اصلی دارو به انگلیسی کوچک",
   "image_category": "دقیقا یکی از: metformin|insulin|injection|tablets|capsules|vitamin|antibiotic|blood_pressure|syrup|pharmacy",
   "slides": [
-    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه"}},
+    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه با تلفظ واضح نام دارو به فارسی"}},
     {{"title": "عنوان ۲", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
     {{"title": "عنوان ۳", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
     {{"title": "عنوان ۴", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
     {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم"}}
   ]
 }}
-قوانین image_category:
-- اگر موضوع متفورمین است فقط metformin
-- اگر انسولین است فقط insulin
-- اگر آمپول/تزریقی/لاغری تزریقی است injection
-- اگر شربت است syrup
-- اگر فشار خون است blood_pressure
-- اگر آنتی‌بیوتیک است antibiotic
-- اگر ویتامین/مکمل است vitamin
+در narration نام داروها را با فاصله هجا بنویس اگر سخت‌تلفظ هستند (مثل مت فور مین).
 فقط JSON.
 """
     response = client.models.generate_content(model=MODEL, contents=prompt)
@@ -227,7 +256,7 @@ def file_hash(path: str) -> str:
 
 
 def download_image(url: str, path: str) -> bool:
-    if not url or url in USED_URLS:
+    if not url:
         return False
     try:
         r = requests.get(url, timeout=50, headers=HEADERS, allow_redirects=True)
@@ -243,12 +272,8 @@ def download_image(url: str, path: str) -> bool:
             im.load()
             if im.size[0] < 200 or im.size[1] < 200:
                 return False
-        digest = file_hash(path)
-        if digest in USED_HASHES:
-            # اجازه استفاده مجدد فقط با نام متفاوت مسیر خروجی (برای کمبود فایل)
-            pass
         USED_URLS.add(url)
-        USED_HASHES.add(digest)
+        USED_HASHES.add(file_hash(path))
         return True
     except Exception as e:
         print(f"دانلود خطا: {e}")
@@ -256,10 +281,7 @@ def download_image(url: str, path: str) -> bool:
 
 
 def resolve_category(topic: str, preferred: str = "", drug_name: str = "") -> str:
-    """یک دسته اصلی و دقیق برای کل ویدیو"""
     t = f"{topic} {preferred} {drug_name}".lower()
-
-    # اولویت با نام دقیق دارو
     exact = [
         ("metformin", ["metformin", "متفورمین", "گلوکوفاژ"]),
         ("insulin", ["insulin", "انسولین"]),
@@ -275,19 +297,16 @@ def resolve_category(topic: str, preferred: str = "", drug_name: str = "") -> st
     for cat, keys in exact:
         if any(k in t for k in keys):
             return cat
-
     if preferred in IMAGE_POOL:
         return preferred
     return "tablets"
 
 
 def fetch_related_background(path: str, slide_index: int) -> bool:
-    """فقط از دسته فعال همان دارو — بدون قاطی کردن دسته‌های دیگر"""
     cat = ACTIVE_CATEGORY if ACTIVE_CATEGORY in IMAGE_POOL else "tablets"
     pool = list(IMAGE_POOL.get(cat, IMAGE_POOL["tablets"]))
-    print(f"=== اسلاید {slide_index + 1} | فقط دسته: {cat} | تعداد فایل: {len(pool)}")
+    print(f"=== اسلاید {slide_index + 1} | دسته: {cat}")
 
-    # چرخش برای تنوع بین اسلایدها داخل همان دارو
     if pool:
         start = slide_index % len(pool)
         ordered = pool[start:] + pool[:start]
@@ -295,20 +314,39 @@ def fetch_related_background(path: str, slide_index: int) -> bool:
         ordered = []
 
     for url in ordered:
-        # برای فایل تکراری در اسلایدهای مختلف، hash را محدود نکن اگر فقط یک عکس داریم
-        if url in USED_URLS and len(set(pool)) > 1:
-            continue
         print(f"تلاش: {url[:100]}")
-        # اجازه دانلود مجدد همان URL با بازنشانی موقت برای داروهایی با عکس کم
-        was_used = url in USED_URLS
-        if was_used:
-            USED_URLS.discard(url)
         if download_image(url, path):
+            SUCCESSFUL_BGS.append(path)
             print(f"✓ تصویر مرتبط با {cat}")
             return True
 
-    print("✗ دانلود ممکن نشد")
+    print("✗ دانلود نشد — تلاش برای پر کردن از تصاویر قبلی")
     return False
+
+
+def fill_background_from_success(path: str, slide_index: int) -> bool:
+    """اگر دانلود نشد، از تصاویر موفق قبلی کپی/آینه کن تا فریم خالی نماند"""
+    if not SUCCESSFUL_BGS:
+        return False
+    src = SUCCESSFUL_BGS[slide_index % len(SUCCESSFUL_BGS)]
+    if not os.path.exists(src):
+        src = SUCCESSFUL_BGS[0]
+    try:
+        img = Image.open(src).convert("RGB")
+        # آینه‌کردن و کمی تغییر نور برای تنوع
+        if slide_index % 2 == 1:
+            img = ImageOps.mirror(img)
+        if slide_index % 3 == 0:
+            img = ImageEnhance.Brightness(img).enhance(0.92)
+        elif slide_index % 3 == 1:
+            img = ImageEnhance.Contrast(img).enhance(1.08)
+        img.save(path, quality=92)
+        SUCCESSFUL_BGS.append(path)
+        print(f"✓ فریم خالی با آینه/کپی تصویر قبلی پر شد")
+        return True
+    except Exception as e:
+        print(f"خطا در پر کردن فریم: {e}")
+        return False
 
 
 def solid_pharmacy_bg(path: str):
@@ -376,7 +414,6 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGB")
         bg = ImageOps.fit(bg, (WIDTH, HEIGHT), method=Image.Resampling.LANCZOS)
-        # کمی تنوع کادربندی برای یکسان نبودن اسلایدها وقتی عکس یکی است
         if index % 2 == 0:
             bg = ImageEnhance.Brightness(bg).enhance(0.62)
         else:
@@ -423,8 +460,26 @@ def create_slide_image(title: str, body: str, index: int, total: int, out_path: 
     print(f"اسلاید {index} ساخته شد")
 
 
+def phonetize_for_tts(text: str) -> str:
+    """جایگزینی نام داروها با تلفظ واضح‌تر برای edge-tts"""
+    out = text or ""
+    for pattern, replacement in PRONUNCIATION_MAP:
+        out = re.sub(pattern, replacement, out, flags=re.IGNORECASE)
+    # فاصله‌گذاری ملایم بین اعداد و واحدها
+    out = re.sub(r"(\d)\s*(میلی)", r"\1 \2", out)
+    return out
+
+
 async def make_narration_file(text: str, out_path: str):
-    communicate = edge_tts.Communicate(text.strip(), voice="fa-IR-FaridNeural", rate="-15%", pitch="-4Hz")
+    spoken = phonetize_for_tts(text.strip())
+    print(f"TTS: {spoken[:80]}...")
+    # کمی آرام‌تر برای وضوح نام داروها
+    communicate = edge_tts.Communicate(
+        spoken,
+        voice="fa-IR-FaridNeural",
+        rate="-18%",
+        pitch="-3Hz",
+    )
     await communicate.save(out_path)
 
 
@@ -507,7 +562,8 @@ def send_video(path: str, caption: str = ""):
 
 
 def main():
-    global ACTIVE_CATEGORY
+    global ACTIVE_CATEGORY, SUCCESSFUL_BGS
+    SUCCESSFUL_BGS = []
     topic = get_topic()
     print("تولید محتوا...")
     package = generate_content_package(topic)
@@ -519,7 +575,7 @@ def main():
     preferred = (package.get("image_category") or "").strip()
     drug_name = (package.get("drug_name") or "").strip()
     ACTIVE_CATEGORY = resolve_category(topic, preferred, drug_name)
-    print(f"دسته تصویر نهایی برای این پست: {ACTIVE_CATEGORY} (drug={drug_name})")
+    print(f"دسته تصویر: {ACTIVE_CATEGORY}")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -529,7 +585,8 @@ def main():
             bg_file = str(tmp / f"bg_{i+1}.jpg")
             ok = fetch_related_background(bg_file, i)
             if not ok:
-                solid_pharmacy_bg(bg_file)
+                if not fill_background_from_success(bg_file, i):
+                    solid_pharmacy_bg(bg_file)
 
             out = str(tmp / f"slide_{i+1}.jpg")
             if i == 0:
@@ -556,7 +613,7 @@ def main():
         full_text = f"""✅ بسته اینستاگرام / یوتیوب شورت
 
 📌 موضوع: {topic}
-🧪 دارو/دسته تصویر: {drug_name or ACTIVE_CATEGORY}
+🧪 دارو/دسته: {drug_name or ACTIVE_CATEGORY}
 
 ——— کپشن ———
 {package.get('caption', '')}
@@ -569,11 +626,11 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🖼️ تصاویر فقط مرتبط با همین دارو
+🖼️ فریم خالی با آینه تصاویر پر می‌شود | تلفظ نام داروها بهبود یافته
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(video_path, caption=f"🎬 تصاویر مرتبط با: {drug_name or ACTIVE_CATEGORY}")
+        send_video(video_path, caption=f"🎬 {drug_name or ACTIVE_CATEGORY} | بدون فریم خالی")
 
     print("✅ تمام")
 
