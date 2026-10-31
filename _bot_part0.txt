@@ -1,0 +1,175 @@
+import os
+import re
+import json
+import random
+import asyncio
+import hashlib
+import tempfile
+from io import BytesIO
+from pathlib import Path
+from urllib.parse import quote
+
+import requests
+import edge_tts
+import arabic_reshaper
+from google import genai
+from google.genai import types
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageOps
+from moviepy.editor import (
+    ImageClip,
+    AudioFileClip,
+    CompositeAudioClip,
+    concatenate_videoclips,
+    afx,
+)
+
+GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+CUSTOM_TOPIC = os.environ.get("CUSTOM_TOPIC", "").strip()
+
+client = genai.Client(api_key=GOOGLE_API_KEY)
+MODEL = "gemini-3.5-flash-lite"
+
+TRENDING_TOPICS = [
+    "کمبود داروهای حیاتی در داروخانه‌های ایران و راه‌های مدیریت آن",
+    "متفورمین و کاربردهای جدید آن فراتر از دیابت",
+    "مکمل‌های ویتامین D و اشتباهات رایج مصرف در ایران",
+    "داروهای ضدالتهاب NSAID و عوارض گوارشی آن‌ها",
+    "انسولین‌ها و نکات مهم نگهداری و تزریق برای بیماران",
+    "آنتی‌بیوتیک‌ها و مقاومت میکروبی؛ هشدار به بیماران",
+    "داروهای فشار خون و تداخلات مهم غذایی",
+    "کپسول امگا۳ و واقعیت‌های علمی پشت تبلیغات",
+    "داروهای ضد افسردگی و زمان شروع اثر واقعی",
+    "شربت‌های سرماخوردگی کودکان و هشدارهای مصرف",
+]
+
+WIDTH, HEIGHT = 1080, 1920
+MIN_SLIDE_DUR = 3.5
+MAX_SLIDE_DUR = 14.0
+HEADERS = {
+    "User-Agent": "PharmaAgent/4.3 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "Accept": "image/*,*/*;q=0.8",
+}
+
+CURRENT_TOPIC = ""
+ACTIVE_CATEGORY = "tablets"
+PRESENTER_PATH = None
+
+PRONUNCIATION_MAP = [
+    (r"خنثی", "خُن‌سا"),
+    (r"خنثا", "خُن‌سا"),
+    (r"کلوپیدوگرل", "پلاویکس"),
+    (r"کلوپیدگرل", "پلاویکس"),
+    (r"clopidogrel", "پلاویکس"),
+    (r"Clopidogrel", "پلاویکس"),
+    (r"اومپرازول", "اُمِپ‌رازول"),
+    (r"امپرازول", "اُمِپ‌رازول"),
+    (r"omeprazole", "اُمِپ‌رازول"),
+    (r"پلاویکس", "پلاویکس"),
+    (r"plavix", "پلاویکس"),
+    (r"منیزیوم", "مَگ‌نِ‌زیوم"),
+    (r"منیزیم", "مَگ‌نِ‌زیوم"),
+    (r"magnesium", "مَگ‌نِ‌زیوم"),
+    (r"کلسیم", "کَل‌سی‌یوم"),
+    (r"calcium", "کَل‌سی‌یوم"),
+    (r"زینک", "زینک"),
+    (r"zinc", "زینک"),
+    (r"آهن", "آ‌هَن"),
+    (r"متفورمین", "مت‌فور‌مین"),
+    (r"metformin", "مت‌فور‌مین"),
+    (r"انسولین", "اِن‌سو‌لین"),
+    (r"insulin", "اِن‌سو‌لین"),
+    (r"ویتامین\\s*D\\b", "ویتامین دی"),
+    (r"ویتامین\\s*d\\b", "ویتامین دی"),
+    (r"ویتامین\\s*دی", "ویتامین دی"),
+    (r"امگا\\s*۳", "اُمگا سه"),
+    (r"امگا\\s*3", "اُمگا سه"),
+    (r"آموکسی‌سیلین", "آموکسی‌سی‌لین"),
+    (r"amoxicillin", "آموکسی‌سی‌لین"),
+    (r"NSAID", "اِن‌سِید"),
+    (r"ایبوپروفن", "ایبو‌پروفن"),
+    (r"استامینوفن", "اِستامینوفن"),
+    (r"لوزارتان", "لوزار‌تان"),
+    (r"آملودیپین", "آملو‌دیپین"),
+    (r"اُزِمپیک", "اُزِمپیک"),
+    (r"Ozempic", "اُزِمپیک"),
+    (r"سماگلوتاید", "سِما‌گلو‌تاید"),
+    (r"پرل", "پِرل"),
+    (r"۵۰\\s*هزار", "پنجاه هزار"),
+    (r"50\\s*هزار", "پنجاه هزار"),
+    (r"mg\\b", "میلی‌گرم"),
+    (r"IU\\b", "آی‌یو"),
+]
+
+PROP_PROMPTS = {
+    "ampoule": "holding a clear glass medicine ampoule and a medical syringe elegantly in her hands, pharmaceutical injection theme",
+    "tablet": "holding a white medicine tablet and a small blister pack of pills in her hands",
+    "capsule": "holding a two-tone medicine capsule between her fingers",
+    "syrup": "holding a small amber cough syrup bottle with a measuring spoon",
+}
+
+# فقط عکس‌های تأییدشده: خانم با روپوش سفید (نه قرص/گوشی پزشکی)
+WOMAN_PHARMACIST_STOCK = [
+    "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    "https://images.pexels.com/photos/8657286/pexels-photo-8657286.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    "https://images.pexels.com/photos/6749773/pexels-photo-6749773.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    "https://images.pexels.com/photos/5215024/pexels-photo-5215024.jpeg?auto=compress&cs=tinysrgb&w=1080",
+]
+STOCK_PRESENTER = {
+    "ampoule": WOMAN_PHARMACIST_STOCK,
+    "tablet": WOMAN_PHARMACIST_STOCK,
+    "capsule": WOMAN_PHARMACIST_STOCK,
+    "syrup": WOMAN_PHARMACIST_STOCK,
+}
+
+SOFT_MUSIC_URLS = [
+    "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=empty-mind-118973.mp3",
+    "https://cdn.pixabay.com/download/audio/2021/11/25/audio_9174bd675d.mp3?filename=soft-piano-ambient-114064.mp3",
+]
+
+
+def get_topic() -> str:
+    global CURRENT_TOPIC
+    if CUSTOM_TOPIC:
+        print(f"موضوع دستی: {CUSTOM_TOPIC}")
+        CURRENT_TOPIC = CUSTOM_TOPIC
+        return CUSTOM_TOPIC
+    topic = random.choice(TRENDING_TOPICS)
+    print(f"موضوع روز: {topic}")
+    CURRENT_TOPIC = topic
+    return topic
+
+
+def generate_content_package(topic: str) -> dict:
+    prompt = f"""
+تو استراتژیست محتوای تخصصی داروسازی برای اینستاگرام و یوتیوب‌شورت در ایران هستی.
+موضوع: «{topic}»
+
+فقط JSON معتبر برگردان:
+{{
+  "caption": "کپشن کامل پست (۳ تا ۵ پاراگراف علمی و جذاب)",
+  "hashtags": "۱۲ هشتگ فارسی و انگلیسی",
+  "story_text": "متن کوتاه استوری حداکثر ۲ خط",
+  "cover_hook": "یک جمله خیلی جذاب برای فریم اول (حداکثر ۱۲ کلمه)",
+  "drug_name": "نام اصلی دارو به انگلیسی کوچک",
+  "image_category": "دقیقا یکی از: metformin|insulin|injection|tablets|capsules|vitamin|antibiotic|blood_pressure|syrup|pharmacy",
+  "slides": [
+    {{"title": "عنوان کاور", "body": "جمله کوتاه", "narration": "جمله افتتاحیه"}},
+    {{"title": "عنوان ۲", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
+    {{"title": "عنوان ۳", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
+    {{"title": "عنوان ۴", "body": "حداکثر ۱۸ کلمه", "narration": "گفتاری طبیعی"}},
+    {{"title": "جمع‌بندی", "body": "نتیجه کوتاه", "narration": "جمع‌بندی گرم"}}
+  ]
+}}
+قوانین املا:
+- title و body و caption با املای استاندارد فارسی.
+- اگر موضوع درباره کلوپیدوگرل است، در narration ترجیحاً از نام برند «پلاویکس» استفاده کن.
+فقط JSON.
+"""
+    response = client.models.generate_content(model=MODEL, contents=prompt)
+    text = response.text.strip()
+    match = re.search(r"\\{.*\\}", text, re.DOTALL)
+    if not match:
+        raise ValueError("JSON معتبر دریافت نشد")
+    return json.loads(match.group())
