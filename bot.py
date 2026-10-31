@@ -48,7 +48,7 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/4.1 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/4.2 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
@@ -98,26 +98,18 @@ PROP_PROMPTS = {
     "syrup": "holding a small amber cough syrup bottle with a measuring spoon",
 }
 
-# تصاویر آماده رایگان (Pexels) — خانم داروساز / روپوش سفید
+# فقط عکس‌های تأییدشده: خانم با روپوش سفید (نه قرص/گوشی پزشکی)
+WOMAN_PHARMACIST_STOCK = [
+    "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    "https://images.pexels.com/photos/8657286/pexels-photo-8657286.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    "https://images.pexels.com/photos/6749773/pexels-photo-6749773.jpeg?auto=compress&cs=tinysrgb&w=1080",
+    "https://images.pexels.com/photos/5215024/pexels-photo-5215024.jpeg?auto=compress&cs=tinysrgb&w=1080",
+]
 STOCK_PRESENTER = {
-    "ampoule": [
-        "https://images.pexels.com/photos/4047074/pexels-photo-4047074.jpeg?auto=compress&cs=tinysrgb&w=1080",
-        "https://images.pexels.com/photos/3376799/pexels-photo-3376799.jpeg?auto=compress&cs=tinysrgb&w=1080",
-        "https://images.pexels.com/photos/5206949/pexels-photo-5206949.jpeg?auto=compress&cs=tinysrgb&w=1080",
-    ],
-    "tablet": [
-        "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
-        "https://images.pexels.com/photos/5206949/pexels-photo-5206949.jpeg?auto=compress&cs=tinysrgb&w=1080",
-        "https://images.pexels.com/photos/5726794/pexels-photo-5726794.jpeg?auto=compress&cs=tinysrgb&w=1080",
-    ],
-    "capsule": [
-        "https://images.pexels.com/photos/5726794/pexels-photo-5726794.jpeg?auto=compress&cs=tinysrgb&w=1080",
-        "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
-    ],
-    "syrup": [
-        "https://images.pexels.com/photos/5206949/pexels-photo-5206949.jpeg?auto=compress&cs=tinysrgb&w=1080",
-        "https://images.pexels.com/photos/19471013/pexels-photo-19471013.jpeg?auto=compress&cs=tinysrgb&w=1080",
-    ],
+    "ampoule": WOMAN_PHARMACIST_STOCK,
+    "tablet": WOMAN_PHARMACIST_STOCK,
+    "capsule": WOMAN_PHARMACIST_STOCK,
+    "syrup": WOMAN_PHARMACIST_STOCK,
 }
 
 SOFT_MUSIC_URLS = [
@@ -259,11 +251,8 @@ def build_presenter_prompt(category: str) -> str:
 
 def download_stock_presenter(path: str, category: str) -> bool:
     prop = prop_type_for_category(category)
-    urls = list(STOCK_PRESENTER.get(prop, STOCK_PRESENTER["tablet"]))
-    for extra in STOCK_PRESENTER.values():
-        for u in extra:
-            if u not in urls:
-                urls.append(u)
+    urls = list(STOCK_PRESENTER.get(prop, WOMAN_PHARMACIST_STOCK))
+    random.shuffle(urls)
     for url in urls:
         try:
             print(f"دانلود استوک: {url[:70]}...")
@@ -279,7 +268,7 @@ def download_stock_presenter(path: str, category: str) -> bool:
                 im.load()
                 if im.size[0] < 300 or im.size[1] < 300:
                     continue
-            print("✓ تصویر آماده اینترنت دانلود شد")
+            print("✓ تصویر خانم داروساز دانلود شد")
             return True
         except Exception as e:
             print(f"استوک خطا: {e}")
@@ -611,7 +600,7 @@ def main():
 ——— نریشن ———
 {full_nar}
 
-🖼️ مجری تمام‌صفحه (AI یا استوک) | 🔊 Dilara
+🖼️ مجری: خانم داروساز (AI یا استوک تأییدشده) | 🔊 Dilara
 """
         send_message(full_text)
         send_photos(slide_paths)
