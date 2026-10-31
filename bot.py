@@ -47,7 +47,7 @@ WIDTH, HEIGHT = 1080, 1920
 MIN_SLIDE_DUR = 3.5
 MAX_SLIDE_DUR = 14.0
 HEADERS = {
-    "User-Agent": "PharmaAgent/2.6 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
+    "User-Agent": "PharmaAgent/2.7 (educational; https://github.com/hamidrezamasoudian-netizen/pharma-agent)",
     "Accept": "image/*,*/*;q=0.8",
 }
 
@@ -64,8 +64,8 @@ PRONUNCIATION_MAP = [
     (r"magnesium", "مَگ‌نِ‌زیوم"),
     (r"مَگنزیوم", "مَگ‌نِ‌زیوم"),
     (r"مگ‌نیزیوم", "مَگ‌نِ‌زیوم"),
-    (r"کلسیم", "کَل‌سیم"),
-    (r"calcium", "کَل‌سیم"),
+    (r"کلسیم", "کَل‌سی‌یوم"),
+    (r"calcium", "کَل‌سی‌یوم"),
     (r"زینک", "زینک"),
     (r"zinc", "زینک"),
     (r"آهن", "آ‌هَن"),
@@ -196,8 +196,8 @@ def generate_content_package(topic: str) -> dict:
   ]
 }}
 قوانین املا (خیلی مهم):
-- title و body و caption و cover_hook و story_text فقط املای استاندارد فارسی: منیزیم، متفورمین، انسولین
-- هرگز در متن روی تصویر ننویس: مگ‌نیزیوم، مت‌فور‌مین، اِن‌سو‌لین
+- title و body و caption و cover_hook و story_text فقط املای استاندارد فارسی: منیزیم، کلسیم، متفورمین، انسولین
+- هرگز در متن روی تصویر ننویس: مگ‌نیزیوم، کَل‌سی‌یوم، مت‌فور‌مین
 - narration را هم با همان املای استاندارد بنویس؛ تلفظ صدا جداگانه اصلاح می‌شود
 فقط JSON.
 """
@@ -584,7 +584,6 @@ def main():
                 if not fill_background_from_success(bg_file, i):
                     solid_pharmacy_bg(bg_file)
 
-            # متن روی تصویر = املای استاندارد (بدون phonetize)
             out = str(tmp / f"slide_{i+1}.jpg")
             if i == 0:
                 create_cover_slide(s.get("title", ""), s.get("body", ""), hook, out, bg_file)
@@ -592,7 +591,6 @@ def main():
                 create_slide_image(s.get("title", f"اسلاید {i+1}"), s.get("body", ""), i + 1, len(slides), out, bg_file)
             slide_paths.append(out)
 
-            # فقط صدا phonetize می‌شود
             nar_text = s.get("narration") or f"{s.get('title', '')}. {s.get('body', '')}"
             nar_file = str(tmp / f"nar_{i+1}.mp3")
             try:
