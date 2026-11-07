@@ -70,6 +70,8 @@ HEADERS = {
 CURRENT_TOPIC = ""
 ACTIVE_CATEGORY = "tablets"
 PRESENTER_PATH = None
+VISUAL_STYLE = os.environ.get("VISUAL_STYLE", "anime").strip().lower()
+MANUAL_UPLOAD_MODE = os.environ.get("MANUAL_UPLOAD_MODE", "true").strip().lower() == "true"
 
 PRONUNCIATION_MAP = [
     (r"خنثی", "خُن‌سا"),
@@ -256,16 +258,36 @@ def prop_type_for_category(cat: str) -> str:
 def build_presenter_prompt(category: str) -> str:
     prop = prop_type_for_category(category)
     prop_text = PROP_PROMPTS.get(prop, PROP_PROMPTS["tablet"])
+    if VISUAL_STYLE == "photorealistic":
+        return (
+            "Vertical portrait photo 9:16, photorealistic young Middle Eastern woman pharmacist, "
+            "professional white coat, bright modern pharmacy, " + prop_text + ", soft cinematic lighting, no text, no watermark, no logo"
+        )
     return (
-        "Vertical portrait photo 9:16, photorealistic beautiful young Middle Eastern woman pharmacist, "
-        "elegant professional look, soft natural makeup, warm friendly smile, long dark hair, "
-        "white medical coat over modest clothing, standing in a bright modern pharmacy, "
-        f"{prop_text}, "
-        "the medicine item is clearly visible in her hands as the main prop, "
-        "soft cinematic lighting, shallow depth of field, high detail face, Instagram Reels style, "
-        "no text, no watermark, no logo, no extra floating syringes in background"
+        "Vertical 9:16 high-quality 2D anime educational illustration, consistent young Persian woman pharmacist character, "
+        "expressive eyes, clean cel shading, elegant white pharmacist coat, modest clothing, bright colorful pharmacy laboratory, "
+        f"{prop_text}, clear medicine prop, dynamic composition with room for Persian subtitles at the bottom, "
+        "warm professional mood, polished anime key visual, detailed background, no text, no watermark, no logo, no gore"
     )
 
+
+def create_anime_fallback(path: str, category: str):
+    """Offline-safe stylized fallback; keeps the output illustrated if image APIs fail."""
+    img = Image.new("RGB", (WIDTH, HEIGHT), (20, 35, 75))
+    draw = ImageDraw.Draw(img)
+    for y in range(HEIGHT):
+        t = y / HEIGHT
+        draw.line([(0, y), (WIDTH, y)], fill=(int(25+35*t), int(45+45*t), int(90+45*t)))
+    # Simple anime pharmacist avatar and medicine prop; text is added later on slides.
+    cx, cy = WIDTH//2, 610
+    draw.ellipse((cx-230, cy-250, cx+230, cy+210), fill=(255, 220, 205), outline=(255,255,255), width=8)
+    draw.pieslice((cx-250, cy-300, cx+250, cy+180), 180, 360, fill=(45, 25, 75), outline=(20,15,45), width=8)
+    draw.ellipse((cx-135, cy-25, cx-75, cy+35), fill=(35, 60, 100)); draw.ellipse((cx+75, cy-25, cx+135, cy+35), fill=(35, 60, 100))
+    draw.arc((cx-80, cy+50, cx+80, cy+140), 10, 170, fill=(150, 45, 80), width=8)
+    draw.rounded_rectangle((cx-310, cy+180, cx+310, cy+900), 50, fill=(245,245,250), outline=(160,220,255), width=8)
+    draw.rounded_rectangle((cx+180, cy+350, cx+380, cy+560), 30, fill=(235,250,255), outline=(70,180,220), width=8)
+    draw.rectangle((cx+235, cy+390, cx+325, cy+510), fill=(255,255,255)); draw.line((cx+280,cy+410,cx+280,cy+490), fill=(220,60,80), width=12); draw.line((cx+240,cy+450,cx+320,cy+450), fill=(220,60,80), width=12)
+    img.save(path, quality=95)
 
 def download_stock_presenter(path: str, category: str) -> bool:
     prop = prop_type_for_category(category)
@@ -342,8 +364,12 @@ def generate_presenter_image(path: str, category: str) -> bool:
     except Exception as e:
         print(f"Gemini Image ناموفق: {e}")
 
-    print("✗ تولید AI ناموفق — تلاش برای تصاویر آماده اینترنت")
-    return download_stock_presenter(path, category)
+    if VISUAL_STYLE == "photorealistic":
+        print("✗ تولید AI ناموفق — تلاش برای تصاویر آماده اینترنت")
+        return download_stock_presenter(path, category)
+    print("✗ تولید AI ناموفق — استفاده از fallback انیمه")
+    create_anime_fallback(path, category)
+    return True
 
 
 def solid_pharmacy_bg(path: str):

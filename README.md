@@ -52,3 +52,7 @@ python tools/youtube_oauth.py /path/to/client_secret.json
 ```
 
 پنجره Google باز می‌شود؛ با حساب کانال YouTube وارد شوید و دسترسی upload را تأیید کنید. مقدار چاپ‌شده را فقط در GitHub Actions Secret با نام `YOUTUBE_REFRESH_TOKEN` قرار دهید. خود فایل Client نیز باید به‌صورت متن کامل JSON در Secret `YOUTUBE_CLIENT_SECRETS_JSON` قرار گرفته باشد. هیچ‌کدام را در چت یا GitHub code قرار ندهید.
+
+## حالت فعلی: خروجی انیمه و بارگذاری دستی
+
+سبک پیش‌فرض تولید `anime` است. ویدیو، کپشن، هشتگ، نریشن و زیرنویس فارسی در تلگرام ارسال می‌شوند تا به‌صورت دستی در YouTube Shorts و Instagram Reels بارگذاری شوند. حالت خودکار ناشرها در Workflow با `MANUAL_UPLOAD_MODE=true` خاموش شده است؛ کد اتصال و ناشرها برای استفاده آینده حفظ شده‌اند. برای تغییر سبک به حالت قبلی می‌توان `VISUAL_STYLE=photorealistic` را تنظیم کرد.

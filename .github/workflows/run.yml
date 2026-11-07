@@ -53,6 +53,8 @@ jobs:
           TELEGRAM_APPROVAL_CHAT_ID: ${{ secrets.TELEGRAM_APPROVAL_CHAT_ID }}
           ENABLE_YOUTUBE_PUBLISH: "false"
           ENABLE_INSTAGRAM_PUBLISH: "false"
+          VISUAL_STYLE: anime
+          MANUAL_UPLOAD_MODE: "true"
           CUSTOM_TOPIC: ${{ github.event.inputs.topic }}
         run: python bot.py
       - name: Save topic history state

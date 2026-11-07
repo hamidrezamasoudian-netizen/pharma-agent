@@ -113,6 +113,10 @@ def handle_callback(callback):
     if action == "reject":
         item["status"] = "rejected"; save_approvals(approvals); send(chat_id, "❌ انتشار رد شد."); return
     if action != "approve": return
+    if os.environ.get("MANUAL_UPLOAD_MODE", "true").lower() == "true":
+        item["status"] = "manual_ready"; save_approvals(approvals)
+        send(chat_id, "✅ ویدیو برای بارگذاری دستی آماده است. کپشن و هشتگ‌ها در پیام پیش‌نمایش موجودند؛ انتشار خودکار فعلاً خاموش است.")
+        return
     item["status"] = "publishing"; save_approvals(approvals)
     try:
         with tempfile.TemporaryDirectory() as tmp:

@@ -53,6 +53,8 @@ jobs:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           META_GRAPH_VERSION: ${{ secrets.META_GRAPH_VERSION }}
           ENABLE_INSTAGRAM_PUBLISH: ${{ secrets.ENABLE_INSTAGRAM_PUBLISH }}
+          VISUAL_STYLE: anime
+          MANUAL_UPLOAD_MODE: "true"
         run: python telegram_bridge.py
 
       - name: Save Telegram offset state
