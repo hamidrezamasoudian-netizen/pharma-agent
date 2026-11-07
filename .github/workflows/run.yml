@@ -2,7 +2,8 @@ name: Run Pharma Agent
 
 on:
   schedule:
-    # هر روز ساعت ۲۲:۰۰ به وقت تهران = ۱۸:۳۰ UTC
+    # هر روز ساعت ۱۰:۰۰ و ۲۲:۰۰ به وقت تهران = ۰۶:۳۰ و ۱۸:۳۰ UTC
+    - cron: '30 6 * * *'
     - cron: '30 18 * * *'
   workflow_dispatch:
     inputs:
@@ -54,6 +55,7 @@ jobs:
           ENABLE_YOUTUBE_PUBLISH: "false"
           ENABLE_INSTAGRAM_PUBLISH: "false"
           VISUAL_STYLE: anime
+          ANIME_MASTER_PATH: assets/anime_pharmacist_master.jpg
           MANUAL_UPLOAD_MODE: "true"
           CUSTOM_TOPIC: ${{ github.event.inputs.topic }}
         run: python bot.py

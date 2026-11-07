@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import tempfile
 import subprocess
+import shutil
 from topic_discovery import choose_topic
 from io import BytesIO
 from pathlib import Path
@@ -72,6 +73,7 @@ ACTIVE_CATEGORY = "tablets"
 PRESENTER_PATH = None
 VISUAL_STYLE = os.environ.get("VISUAL_STYLE", "anime").strip().lower()
 MANUAL_UPLOAD_MODE = os.environ.get("MANUAL_UPLOAD_MODE", "true").strip().lower() == "true"
+ANIME_MASTER_PATH = Path(os.environ.get("ANIME_MASTER_PATH", "assets/anime_pharmacist_master.jpg"))
 
 PRONUNCIATION_MAP = [
     (r"خنثی", "خُن‌سا"),
@@ -264,10 +266,10 @@ def build_presenter_prompt(category: str) -> str:
             "professional white coat, bright modern pharmacy, " + prop_text + ", soft cinematic lighting, no text, no watermark, no logo"
         )
     return (
-        "Vertical 9:16 high-quality 2D anime educational illustration, consistent young Persian woman pharmacist character, "
+        "Vertical 9:16 premium realistic anime key visual, consistent recurring young Persian woman pharmacist character, "
         "expressive eyes, clean cel shading, elegant white pharmacist coat, modest clothing, bright colorful pharmacy laboratory, "
         f"{prop_text}, clear medicine prop, dynamic composition with room for Persian subtitles at the bottom, "
-        "warm professional mood, polished anime key visual, detailed background, no text, no watermark, no logo, no gore"
+        "warm professional mood, cinematic Japanese animation film quality, realistic anime facial anatomy, refined hands, detailed background, no text, no watermark, no logo, no gore, no chibi, no childish cartoon, no crude illustration"
     )
 
 
@@ -318,6 +320,11 @@ def download_stock_presenter(path: str, category: str) -> bool:
 
 
 def generate_presenter_image(path: str, category: str) -> bool:
+    # Use one approved master character by default for identity consistency and no quota dependency.
+    if VISUAL_STYLE != "photorealistic" and ANIME_MASTER_PATH.exists() and os.environ.get("REGENERATE_CHARACTER", "false").lower() != "true":
+        shutil.copyfile(ANIME_MASTER_PATH, path)
+        print(f"✓ شخصیت مرجع انیمه استفاده شد: {ANIME_MASTER_PATH}")
+        return True
     prompt = build_presenter_prompt(category)
     print("تولید تصویر مجری:", prompt[:120], "...")
 

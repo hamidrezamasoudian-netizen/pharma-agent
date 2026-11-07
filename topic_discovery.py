@@ -6,12 +6,19 @@ YouTube Data API can be enabled with YOUTUBE_API_KEY for richer ranking.
 from __future__ import annotations
 import hashlib, json, os, re, time
 from pathlib import Path
+from difflib import SequenceMatcher
 from urllib.parse import quote
 import requests
 import xml.etree.ElementTree as ET
 
 STATE_PATH = Path(os.getenv("TOPIC_STATE_FILE", "state/topic_history.json"))
-DEFAULT_TRENDS_RSS = "https://trends.google.com/trending/rss?geo=IR"
+DEFAULT_TRENDS_RSS = ",".join([
+    "https://trends.google.com/trending/rss?geo=IR",
+    "https://www.tebna.ir/rss/tp/2",
+    "https://www.tebna.ir/rss/tp/83",
+    "https://www.salamatnews.com/rss/pl/241",
+    "https://www.salamatnews.com/rss/pl/233",
+])
 
 def normalize(text: str) -> str:
     text = (text or "").lower().strip()
@@ -57,8 +64,19 @@ def _youtube_titles(query: str):
         return []
 
 def _is_pharma_related(title: str) -> bool:
-    words = "دارو دارویی پزشکی سلامت قرص مکمل ویتامین دیابت فشار خون لاغری عوارض درمان pharmacy medicine drug health vitamin diabetes" 
+    words = "دارو دارویی پزشکی سلامت قرص مکمل ویتامین دیابت فشار خون لاغری عوارض درمان واکسن بیماری تداخل دارویی داروخانه pharmacy medicine drug health vitamin diabetes"
     return any(w in normalize(title) for w in words.split())
+
+def _near_duplicate(candidate: str, used_keys) -> bool:
+    key = normalize(candidate)
+    c_tokens = set(key.split())
+    for old in used_keys:
+        if key == old or SequenceMatcher(None, key, old).ratio() >= 0.78:
+            return True
+        o_tokens = set(old.split())
+        if c_tokens and o_tokens and len(c_tokens & o_tokens) / max(1, len(c_tokens | o_tokens)) >= 0.72:
+            return True
+    return False
 
 def choose_topic(custom_topic: str, fallback_topics: list[str]):
     if custom_topic:
@@ -81,7 +99,7 @@ def choose_topic(custom_topic: str, fallback_topics: list[str]):
     seen = set()
     for item in candidates + list(fallback_topics):
         key = normalize(item)
-        if len(key) < 8 or key in seen or key in used:
+        if len(key) < 8 or _near_duplicate(item, list(seen) + list(used.keys())):
             continue
         seen.add(key); unique.append(item.strip())
     topic = unique[0] if unique else fallback_topics[int(time.time()) % len(fallback_topics)]

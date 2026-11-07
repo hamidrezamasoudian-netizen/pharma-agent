@@ -54,6 +54,7 @@ jobs:
           META_GRAPH_VERSION: ${{ secrets.META_GRAPH_VERSION }}
           ENABLE_INSTAGRAM_PUBLISH: ${{ secrets.ENABLE_INSTAGRAM_PUBLISH }}
           VISUAL_STYLE: anime
+          ANIME_MASTER_PATH: assets/anime_pharmacist_master.jpg
           MANUAL_UPLOAD_MODE: "true"
         run: python telegram_bridge.py
 
