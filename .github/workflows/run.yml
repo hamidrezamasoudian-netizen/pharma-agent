@@ -49,6 +49,10 @@ jobs:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_ADMIN_ID: ${{ secrets.TELEGRAM_ADMIN_ID }}
+          TELEGRAM_APPROVAL_CHAT_ID: ${{ secrets.TELEGRAM_APPROVAL_CHAT_ID }}
+          ENABLE_YOUTUBE_PUBLISH: "false"
+          ENABLE_INSTAGRAM_PUBLISH: "false"
           CUSTOM_TOPIC: ${{ github.event.inputs.topic }}
         run: python bot.py
       - name: Save topic history state
