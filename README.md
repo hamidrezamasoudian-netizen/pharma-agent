@@ -27,3 +27,17 @@ python bot.py
 ```
 
 برای اجرای بدون موضوع دستی، `GEMINI_API_KEY` و برای ارسال تلگرام، متغیرهای Telegram موجود در Workflow را تنظیم کنید.
+
+## تأیید تلگرام و انتشار
+
+پس از تولید، پیش‌نمایش به `TELEGRAM_APPROVAL_CHAT_ID` ارسال می‌شود و فقط کاربری که شناسه‌اش در `TELEGRAM_ADMIN_ID` است می‌تواند دکمه تأیید را بزند. درخواست‌ها در `state/pending_approvals.json` ذخیره می‌شوند و پس از ۲۴ ساعت منقضی می‌شوند.
+
+Secretهای لازم برای Workflow پل تلگرام:
+
+- `TELEGRAM_ADMIN_ID` و در صورت تفاوت `TELEGRAM_APPROVAL_CHAT_ID`
+- `YOUTUBE_CLIENT_SECRETS_JSON` و `YOUTUBE_REFRESH_TOKEN`
+- `INSTAGRAM_USER_ID` و `INSTAGRAM_ACCESS_TOKEN`
+- `YOUTUBE_PRIVACY_STATUS` (پیشنهاد: `unlisted` برای تست)
+- `ENABLE_YOUTUBE_PUBLISH` و `ENABLE_INSTAGRAM_PUBLISH`
+
+هر دو انتشار فقط بعد از callback تأیید انجام می‌شوند. برای تست مستقل، ابتدا `ENABLE_YOUTUBE_PUBLISH=false` و `ENABLE_INSTAGRAM_PUBLISH=false` تنظیم کنید؛ سپس هرکدام را جداگانه فعال کنید.

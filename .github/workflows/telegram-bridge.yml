@@ -44,6 +44,15 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_ADMIN_ID: ${{ secrets.TELEGRAM_ADMIN_ID }}
+          TELEGRAM_APPROVAL_CHAT_ID: ${{ secrets.TELEGRAM_APPROVAL_CHAT_ID }}
+          YOUTUBE_CLIENT_SECRETS_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRETS_JSON }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          YOUTUBE_PRIVACY_STATUS: ${{ secrets.YOUTUBE_PRIVACY_STATUS }}
+          ENABLE_YOUTUBE_PUBLISH: ${{ secrets.ENABLE_YOUTUBE_PUBLISH }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          META_GRAPH_VERSION: ${{ secrets.META_GRAPH_VERSION }}
+          ENABLE_INSTAGRAM_PUBLISH: ${{ secrets.ENABLE_INSTAGRAM_PUBLISH }}
         run: python telegram_bridge.py
 
       - name: Save Telegram offset state
@@ -66,3 +75,14 @@ jobs:
             git push
           fi
 
+
+      - name: Save pending approvals state
+        if: always()
+        run: |
+          if [ -f state/pending_approvals.json ]; then
+            git config user.name "pharma-agent-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add state/pending_approvals.json
+            git diff --staged --quiet || git commit -m "chore: update approval state"
+            git push
+          fi

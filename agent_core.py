@@ -31,6 +31,8 @@ from moviepy.editor import (
 GOOGLE_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+APPROVAL_CHAT_ID = (os.environ.get("TELEGRAM_APPROVAL_CHAT_ID", "").strip() or os.environ.get("TELEGRAM_ADMIN_ID", "").strip() or TELEGRAM_CHAT_ID)
+APPROVAL_STATE = Path("state/pending_approvals.json")
 CUSTOM_TOPIC = os.environ.get("CUSTOM_TOPIC", "").strip()
 
 client = None
@@ -567,7 +569,7 @@ def build_video(slide_paths, narration_paths, music_path, output_path):
 def send_message(text: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     for i in range(0, len(text), 4000):
-        res = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text[i:i+4000]}, timeout=60)
+        res = requests.post(url, json={"chat_id": APPROVAL_CHAT_ID, "text": text[i:i+4000]}, timeout=60)
         print("متن:", res.json().get("ok"))
 
 
@@ -579,19 +581,37 @@ def send_photos(paths):
         media.append({"type": "photo", "media": f"attach://{key}"})
         files[key] = open(p, "rb")
     try:
-        res = requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "media": json.dumps(media)}, files=files, timeout=120)
+        res = requests.post(url, data={"chat_id": APPROVAL_CHAT_ID, "media": json.dumps(media)}, files=files, timeout=120)
         print("آلبوم:", res.json().get("ok"))
     finally:
         for f in files.values():
             f.close()
 
 
-def send_video(path: str, caption: str = ""):
+def send_video(path: str, caption: str = "", reply_markup=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
+    data = {"chat_id": APPROVAL_CHAT_ID, "caption": caption[:1000]}
+    if reply_markup:
+        data["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
     with open(path, "rb") as f:
-        res = requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "caption": caption[:1000]}, files={"video": f}, timeout=180)
-    print("ویدیو:", res.json().get("ok"))
+        res = requests.post(url, data=data, files={"video": f}, timeout=180)
+    payload = res.json()
+    print("ویدیو:", payload.get("ok"))
+    return payload
 
+def save_pending_approval(approval_id, package, topic, video_file_id):
+    APPROVAL_STATE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        state = json.loads(APPROVAL_STATE.read_text(encoding="utf-8"))
+    except Exception:
+        state = {}
+    state[approval_id] = {
+        "status": "pending", "created_at": int(__import__("time").time()),
+        "topic": topic, "title": package.get("cover_hook") or topic,
+        "caption": package.get("caption", ""), "hashtags": package.get("hashtags", ""),
+        "video_file_id": video_file_id,
+    }
+    APPROVAL_STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def main():
     global ACTIVE_CATEGORY, PRESENTER_PATH
@@ -659,7 +679,18 @@ def main():
 """
         send_message(full_text)
         send_photos(slide_paths)
-        send_video(video_path, caption=f"🎬 {drug_name or ACTIVE_CATEGORY}")
+        import uuid
+        approval_id = uuid.uuid4().hex[:16]
+        buttons = {"inline_keyboard": [[
+            {"text": "✅ تأیید انتشار در YouTube و Instagram", "callback_data": f"approval:{approval_id}:approve"},
+            {"text": "❌ رد", "callback_data": f"approval:{approval_id}:reject"}
+        ]]}
+        video_result = send_video(video_path, caption=f"🎬 {drug_name or ACTIVE_CATEGORY}\n\nپیش‌نمایش آماده است؛ برای انتشار یکی از دکمه‌ها را بزنید.", reply_markup=buttons)
+        video_message = video_result.get("result") or {}
+        video_file_id = (video_message.get("video") or {}).get("file_id")
+        if not video_file_id:
+            raise RuntimeError(f"Telegram video upload failed: {video_result}")
+        save_pending_approval(approval_id, package, topic, video_file_id)
 
     print("✅ تمام")
 
