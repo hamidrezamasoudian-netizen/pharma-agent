@@ -11,6 +11,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: write
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
@@ -43,7 +46,19 @@ jobs:
       - name: Run Pharma Agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CUSTOM_TOPIC: ${{ github.event.inputs.topic }}
         run: python bot.py
+      - name: Save topic history state
+        if: always()
+        run: |
+          if [ -f state/topic_history.json ]; then
+            git config user.name "pharma-agent-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add state/topic_history.json
+            git diff --staged --quiet || git commit -m "chore: update topic history"
+            git push
+          fi
+
