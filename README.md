@@ -41,3 +41,14 @@ Secretهای لازم برای Workflow پل تلگرام:
 - `ENABLE_YOUTUBE_PUBLISH` و `ENABLE_INSTAGRAM_PUBLISH`
 
 هر دو انتشار فقط بعد از callback تأیید انجام می‌شوند. برای تست مستقل، ابتدا `ENABLE_YOUTUBE_PUBLISH=false` و `ENABLE_INSTAGRAM_PUBLISH=false` تنظیم کنید؛ سپس هرکدام را جداگانه فعال کنید.
+
+## ساخت Refresh Token یوتیوب
+
+فایل OAuth Client را فقط روی رایانه خود نگه دارید و آن را commit نکنید. سپس در همان رایانه اجرا کنید:
+
+```bash
+pip install -r requirements.txt
+python tools/youtube_oauth.py /path/to/client_secret.json
+```
+
+پنجره Google باز می‌شود؛ با حساب کانال YouTube وارد شوید و دسترسی upload را تأیید کنید. مقدار چاپ‌شده را فقط در GitHub Actions Secret با نام `YOUTUBE_REFRESH_TOKEN` قرار دهید. خود فایل Client نیز باید به‌صورت متن کامل JSON در Secret `YOUTUBE_CLIENT_SECRETS_JSON` قرار گرفته باشد. هیچ‌کدام را در چت یا GitHub code قرار ندهید.
