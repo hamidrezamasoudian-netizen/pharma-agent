@@ -74,6 +74,7 @@ PRESENTER_PATH = None
 VISUAL_STYLE = os.environ.get("VISUAL_STYLE", "anime").strip().lower()
 MANUAL_UPLOAD_MODE = os.environ.get("MANUAL_UPLOAD_MODE", "true").strip().lower() == "true"
 ANIME_MASTER_PATH = Path(os.environ.get("ANIME_MASTER_PATH", "assets/anime_pharmacist_master.jpg"))
+ANIME_VARIANTS_DIR = Path(os.environ.get("ANIME_VARIANTS_DIR", "assets/anime_variants"))
 
 PRONUNCIATION_MAP = [
     (r"خنثی", "خُن‌سا"),
@@ -320,11 +321,17 @@ def download_stock_presenter(path: str, category: str) -> bool:
 
 
 def generate_presenter_image(path: str, category: str) -> bool:
-    # Use one approved master character by default for identity consistency and no quota dependency.
-    if VISUAL_STYLE != "photorealistic" and ANIME_MASTER_PATH.exists() and os.environ.get("REGENERATE_CHARACTER", "false").lower() != "true":
-        shutil.copyfile(ANIME_MASTER_PATH, path)
-        print(f"✓ شخصیت مرجع انیمه استفاده شد: {ANIME_MASTER_PATH}")
-        return True
+    # Choose a different approved pose per topic while preserving the same character identity.
+    if VISUAL_STYLE != "photorealistic" and os.environ.get("REGENERATE_CHARACTER", "false").lower() != "true":
+        variants = sorted(ANIME_VARIANTS_DIR.glob("*.png")) if ANIME_VARIANTS_DIR.exists() else []
+        if ANIME_MASTER_PATH.exists():
+            variants = [ANIME_MASTER_PATH] + variants
+        if variants:
+            seed = hashlib.sha256(f"{CURRENT_TOPIC}|{category}".encode("utf-8")).digest()[0]
+            selected = variants[seed % len(variants)]
+            shutil.copyfile(selected, path)
+            print(f"✓ نمای متنوع شخصیت انیمه استفاده شد: {selected}")
+            return True
     prompt = build_presenter_prompt(category)
     print("تولید تصویر مجری:", prompt[:120], "...")
 

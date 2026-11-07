@@ -56,6 +56,7 @@ jobs:
           ENABLE_INSTAGRAM_PUBLISH: "false"
           VISUAL_STYLE: anime
           ANIME_MASTER_PATH: assets/anime_pharmacist_master.jpg
+          ANIME_VARIANTS_DIR: assets/anime_variants
           MANUAL_UPLOAD_MODE: "true"
           CUSTOM_TOPIC: ${{ github.event.inputs.topic }}
         run: python bot.py

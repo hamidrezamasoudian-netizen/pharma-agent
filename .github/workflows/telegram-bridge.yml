@@ -55,6 +55,7 @@ jobs:
           ENABLE_INSTAGRAM_PUBLISH: ${{ secrets.ENABLE_INSTAGRAM_PUBLISH }}
           VISUAL_STYLE: anime
           ANIME_MASTER_PATH: assets/anime_pharmacist_master.jpg
+          ANIME_VARIANTS_DIR: assets/anime_variants
           MANUAL_UPLOAD_MODE: "true"
         run: python telegram_bridge.py
 
