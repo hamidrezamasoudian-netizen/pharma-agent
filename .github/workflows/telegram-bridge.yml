@@ -1,9 +1,10 @@
 name: Telegram Bridge
 
 on:
-  schedule:
-    # هر ۵ دقیقه پیام‌های جدید بات را چک می‌کند
-    - cron: '*/5 * * * *'
+  # schedule temporarily disabled to conserve Actions minutes (was every 5 minutes)
+  # schedule:
+  #   # هر ۵ دقیقه پیام‌های جدید بات را چک می‌کند
+  #   - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
