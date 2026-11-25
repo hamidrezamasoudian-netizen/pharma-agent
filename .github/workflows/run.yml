@@ -1,11 +1,10 @@
 name: Run Pharma Agent
 
 on:
-  # schedule temporarily disabled to conserve Actions minutes
-  # schedule:
-  #   # هر روز ساعت ۱۰:۰۰ و ۲۲:۰۰ به وقت تهران = ۰۶:۳۰ و ۱۸:۳۰ UTC
-  #   - cron: '30 6 * * *'
-  #   - cron: '30 18 * * *'
+  schedule:
+    # هر روز ساعت ۱۰:۰۰ و ۲۲:۰۰ به وقت تهران = ۰۶:۳۰ و ۱۸:۳۰ UTC
+    - cron: '30 6 * * *'
+    - cron: '30 18 * * *'
   workflow_dispatch:
     inputs:
       topic:
